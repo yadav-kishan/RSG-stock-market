@@ -34,8 +34,7 @@ const extraOrigins = (process.env.FRONTEND_EXTRA_ORIGINS || '')
 const allowlist = isProduction
   ? [
     frontendUrl,
-    process.env.RENDER_EXTERNAL_URL,
-    'https://fox-trading-frontend.onrender.com',
+    'https://fox-trading-frontend-production.up.railway.app',
     'https://www.thefoxtrading.com',
     'https://thefoxtrading.com',
     'https://foxtradingai.com',

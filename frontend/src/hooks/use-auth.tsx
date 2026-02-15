@@ -46,7 +46,7 @@ function getApiBaseUrl() {
   if (isDevelopment) {
     return ''; // Use relative URLs in development (Vite proxy will handle it)
   }
-  return import.meta.env.VITE_API_URL || 'https://fox-trading-api-2jv8.onrender.com';
+  return (import.meta.env.VITE_API_URL || 'https://fox-trading-api-production.up.railway.app').replace(/\/$/, '');
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

@@ -30,10 +30,10 @@ export function setAuthToken(_token: string | null) {
 }
 
 export async function api<T = unknown>(
-  path: string, 
-  init?: { 
-    method?: string; 
-    body?: unknown; 
+  path: string,
+  init?: {
+    method?: string;
+    body?: unknown;
     headers?: Record<string, string>;
     skipAuth?: boolean;
   }
@@ -44,15 +44,15 @@ export async function api<T = unknown>(
   // Determine the base URL based on environment
   const isDevelopment = import.meta.env.DEV;
   let baseUrl;
-  
+
   if (isDevelopment) {
     baseUrl = ''; // Use relative URLs in development (Vite proxy will handle it)
   } else {
     // Production: Use environment variable or explicit fallback
-    baseUrl = import.meta.env.VITE_API_URL || 'https://fox-trading-api-2jv8.onrender.com';
+    baseUrl = (import.meta.env.VITE_API_URL || 'https://fox-trading-api-production.up.railway.app').replace(/\/$/, '');
     console.log('Production API URL:', baseUrl); // Debug log
   }
-    
+
   const fullUrl = path.startsWith('http') ? path : `${baseUrl}${path}`;
 
   // Only log in development mode to improve performance
@@ -89,7 +89,7 @@ export async function api<T = unknown>(
       } else {
         message = data?.error?.message || data?.error || data?.message || message;
       }
-    } catch {}
+    } catch { }
     if (import.meta.env.DEV) {
       console.error('API error:', message);
     }
@@ -110,24 +110,24 @@ export async function api<T = unknown>(
 
 // Synchronous API function for backward compatibility
 export function apiSync<T = unknown>(
-  path: string, 
-  init?: { 
-    method?: string; 
-    body?: unknown; 
-    headers?: Record<string, string> 
+  path: string,
+  init?: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>
   }
 ): Promise<T> {
   const token = getAuthTokenSync();
 
   const isDevelopment = import.meta.env.DEV;
   let baseUrl;
-  
+
   if (isDevelopment) {
     baseUrl = '';
   } else {
     baseUrl = import.meta.env.VITE_API_URL || 'https://fox-trading-api-2jv8.onrender.com';
   }
-    
+
   const fullUrl = path.startsWith('http') ? path : `${baseUrl}${path}`;
 
   return fetch(fullUrl, {
@@ -150,10 +150,10 @@ export function apiSync<T = unknown>(
         } else {
           message = data?.error?.message || data?.error || data?.message || message;
         }
-      } catch {}
+      } catch { }
       throw new Error(message);
     }
-    
+
     try {
       return await res.json() as T;
     } catch {
