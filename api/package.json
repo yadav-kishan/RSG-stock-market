@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js",
+    "start": "npx prisma generate && node index.js",
     "build": "npx prisma generate",
     "lint": "eslint .",
     "seed": "node prisma/seed.js",
     "migrate": "npx prisma migrate deploy",
-    "deploy": "npx prisma db push --accept-data-loss && node index.js"
+    "deploy": "npx prisma generate && npx prisma db push --accept-data-loss && node index.js"
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.901.0",
