@@ -17,9 +17,13 @@ import { adminRouter } from './src/routes/admin.js';
 
 const app = express();
 
+app.get('/', (req, res) => {
+  res.send('Fox Trading API is running');
+});
+
 // CORS configuration for production
 const isProduction = process.env.NODE_ENV === 'production';
-const frontendUrl = process.env.FRONTEND_URL || 
+const frontendUrl = process.env.FRONTEND_URL ||
   (isProduction ? process.env.RENDER_EXTERNAL_URL : 'http://localhost:8080');
 
 // CORS with configurable allowlist
@@ -29,15 +33,15 @@ const extraOrigins = (process.env.FRONTEND_EXTRA_ORIGINS || '')
   .filter(Boolean);
 const allowlist = isProduction
   ? [
-      frontendUrl, 
-      process.env.RENDER_EXTERNAL_URL, 
-      'https://fox-trading-frontend.onrender.com',
-      'https://www.thefoxtrading.com',
-      'https://thefoxtrading.com',
-      'https://foxtradingai.com',
-      'https://www.foxtradingai.com',
-      ...extraOrigins
-    ].filter(Boolean)
+    frontendUrl,
+    process.env.RENDER_EXTERNAL_URL,
+    'https://fox-trading-frontend.onrender.com',
+    'https://www.thefoxtrading.com',
+    'https://thefoxtrading.com',
+    'https://foxtradingai.com',
+    'https://www.foxtradingai.com',
+    ...extraOrigins
+  ].filter(Boolean)
   : ['http://localhost:8080', 'http://localhost:3000'];
 
 // Simplified CORS configuration to ensure it works
@@ -48,25 +52,25 @@ const corsOptions = {
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Is production: ${isProduction}`);
     console.log(`Allowed origins:`, allowlist);
-    
+
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) {
       console.log('✅ No origin - allowing');
       return callback(null, true);
     }
-    
+
     // In development, allow any origin
     if (!isProduction) {
       console.log('✅ Development mode - allowing all origins');
       return callback(null, true);
     }
-    
+
     // Check if the origin is in our allowlist
     if (allowlist.indexOf(origin) !== -1) {
       console.log(`✅ Origin ${origin} is allowed`);
       return callback(null, true);
     }
-    
+
     // Deny the origin
     console.log(`❌ Origin ${origin} is NOT allowed`);
     return callback(new Error('Not allowed by CORS'), false);
@@ -75,8 +79,8 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',
-    'X-Requested-With', 
-    'Content-Type', 
+    'X-Requested-With',
+    'Content-Type',
     'Accept',
     'Authorization',
     'Cache-Control',
@@ -94,8 +98,8 @@ app.use(json({ limit: bodyLimit }));
 app.use(express.urlencoded({ limit: bodyLimit, extended: true }));
 
 
-app.get('/api/health', (_req, res) => res.json({ 
-  ok: true, 
+app.get('/api/health', (_req, res) => res.json({
+  ok: true,
   timestamp: new Date().toISOString(),
   environment: process.env.NODE_ENV || 'development'
 }));
@@ -126,7 +130,7 @@ app.use('/api/admin', adminRouter);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal server error',
     message: isProduction ? 'Something went wrong' : err.message
   });
