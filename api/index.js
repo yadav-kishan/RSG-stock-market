@@ -35,6 +35,8 @@ const allowlist = isProduction
   ? [
     frontendUrl,
     'https://fox-trading-frontend-production.up.railway.app',
+    'https://rsgstockmarket.com',
+    'https://www.rsgstockmarket.com',
     'https://www.thefoxtrading.com',
     'https://thefoxtrading.com',
     'https://foxtradingai.com',
