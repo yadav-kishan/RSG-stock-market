@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  preview: {
+    allowedHosts: true,
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,
