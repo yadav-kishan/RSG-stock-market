@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  Users, 
+import {
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Users,
   Target,
   Copy,
   Check,
@@ -17,11 +17,14 @@ import {
   DollarSign,
   BarChart3,
   UserCheck,
-  Loader2
+  Loader2,
+  Send
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/use-api';
 import { toast } from '@/hooks/use-toast';
 import CryptoPrices from '@/components/CryptoPrices';
+import CountdownTimer from '@/components/CountdownTimer';
+import P2PTransferModal from '@/components/P2PTransferModal';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
@@ -29,34 +32,35 @@ const Dashboard: React.FC = () => {
   const [showBalance, setShowBalance] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
-  const { data, loading, error } = useDashboardData();
-  
+  const [isP2PModalOpen, setIsP2PModalOpen] = useState(false);
+  const { data, loading, error, refetch } = useDashboardData();
+
   // Fetch additional income data
-  const { data: directIncomeData } = useQuery({ 
-    queryKey: ['direct-income'], 
+  const { data: directIncomeData } = useQuery({
+    queryKey: ['direct-income'],
     queryFn: () => api('/api/user/dashboard/direct-income'),
     enabled: !!data
   });
-  
-  const { data: levelIncomeData } = useQuery({ 
-    queryKey: ['level-income'], 
+
+  const { data: levelIncomeData } = useQuery({
+    queryKey: ['level-income'],
     queryFn: () => api('/api/user/dashboard/level-income'),
     enabled: !!data
   });
-  
-  const { data: todayWithdrawalData } = useQuery({ 
-    queryKey: ['today-withdrawal'], 
+
+  const { data: todayWithdrawalData } = useQuery({
+    queryKey: ['today-withdrawal'],
     queryFn: () => api('/api/user/dashboard/today-withdrawal'),
     enabled: !!data
   });
-  
+
   // Update timestamp when data changes
   React.useEffect(() => {
     if (data && !loading) {
       setLastUpdate(new Date());
     }
   }, [data, loading]);
-  
+
 
   // Show loading state
   if (loading) {
@@ -92,7 +96,8 @@ const Dashboard: React.FC = () => {
     name: data.user_name,
     referralCode: data.referral_code,
     email: data.user_email,
-    totalBalance: Number(data.wallet_balance), // This shows deposited amount as requested
+    totalBalance: Number(data.wallet_balance), // Amount deposited through website
+    packageBalance: Number(data.package_wallet_balance || 0), // Package Wallet Balance
     totalIncome: Number(data.total_income),
     totalWithdrawal: Number(data.total_withdrawal),
     investment: Number(data.total_investment),
@@ -102,9 +107,9 @@ const Dashboard: React.FC = () => {
     directTeam: data.direct_team,
     totalTeam: data.total_team,
     // New income data
-    directIncome: Number(directIncomeData?.totalDirectIncome || 0),
-    levelIncome: Number(levelIncomeData?.totalLevelIncome || 0),
-    todayWithdrawal: Number(todayWithdrawalData?.totalTodayWithdrawal || 0)
+    directIncome: Number((directIncomeData as any)?.totalDirectIncome || 0),
+    levelIncome: Number((levelIncomeData as any)?.totalLevelIncome || 0),
+    todayWithdrawal: Number((todayWithdrawalData as any)?.totalTodayWithdrawal || 0)
   };
 
   // Calculate corrected total income including level income
@@ -121,6 +126,17 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8">
+      {/* P2P Transfer Modal */}
+      <P2PTransferModal
+        isOpen={isP2PModalOpen}
+        onClose={() => setIsP2PModalOpen(false)}
+        onSuccess={refetch}
+        currentBalance={userStats.packageBalance}
+      />
+
+      {/* Countdown Timer */}
+      <CountdownTimer />
+
       {/* Header Section */}
       <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/5 rounded-lg p-4 sm:p-6 border border-yellow-500/20">
         {/* Real-time update indicator */}
@@ -135,14 +151,14 @@ const Dashboard: React.FC = () => {
             <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* User Info */}
           <div className="space-y-1 sm:space-y-2">
             <h2 className="text-base sm:text-lg font-semibold text-foreground">Welcome Back!</h2>
             <p className="text-xl sm:text-2xl font-bold text-yellow-500 truncate">{userStats.name}</p>
           </div>
-          
+
           {/* Referral Code & Link */}
           <div className="space-y-1 sm:space-y-2">
             <p className="text-xs sm:text-sm text-muted-foreground">Referral Code</p>
@@ -177,7 +193,7 @@ const Dashboard: React.FC = () => {
               </Button>
             </div>
           </div>
-          
+
           {/* Email */}
           <div className="space-y-1 sm:space-y-2 sm:col-span-2 lg:col-span-1">
             <p className="text-xs sm:text-sm text-muted-foreground">Email ID</p>
@@ -186,38 +202,62 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Balance Section */}
-      <Card className="border-yellow-500/20">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-            <CardTitle className="text-lg sm:text-xl">My Investment</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => setShowBalance(!showBalance)}
-              >
-                {showBalance ? <Eye size={14} className="sm:w-4 sm:h-4" /> : <EyeOff size={14} className="sm:w-4 sm:h-4" />}
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                className="bg-yellow-500 hover:bg-yellow-600 text-black"
-              >
-                <Wallet size={14} className="mr-2 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Wallet</span>
-                <span className="sm:hidden">Balance</span>
-              </Button>
+      {/* Wallets Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        {/* Package Wallet (For P2P & Investment) */}
+        <Card className="border-yellow-500/40 bg-yellow-500/5 items-center">
+          <CardHeader className="pb-3 text-center sm:text-left">
+            <CardTitle className="text-lg sm:text-xl flex items-center justify-center sm:justify-start gap-2 text-yellow-500">
+              <Wallet className="h-5 w-5" />
+              Package Wallet
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-6">
+            <div className="flex flex-col gap-4">
+              <div className="text-3xl sm:text-4xl font-bold text-white text-center sm:text-left">
+                {showBalance ? `$${userStats.packageBalance.toLocaleString()}` : '****'}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  onClick={() => setIsP2PModalOpen(true)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold flex-1"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Transfer (P2P)
+                </Button>
+                {/* Investment button could go here/link to investment page */}
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-500 mb-2 sm:mb-4">
-            {showBalance ? `$${userStats.totalBalance.toLocaleString()}` : '****'}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* My Investment (Active Income Wallet) */}
+        <Card className="border-blue-500/20">
+          <CardHeader className="pb-3 sm:pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+              <CardTitle className="text-lg sm:text-xl">Total Investment</CardTitle>
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setShowBalance(!showBalance)}
+                >
+                  {showBalance ? <Eye size={14} className="sm:w-4 sm:h-4" /> : <EyeOff size={14} className="sm:w-4 sm:h-4" />}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-500 mb-2 sm:mb-4">
+              {showBalance ? `$${userStats.investment.toLocaleString()}` : '****'}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Total Active Investment
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Income & Withdrawal Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
@@ -332,7 +372,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-xl font-bold text-blue-500">${userStats.totalBusiness.toLocaleString()}</p>
               </div>
             </div>
-            
+
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-green-500/5 rounded-lg border border-green-500/10">
                 <span className="text-sm font-medium">Right Leg Business</span>
@@ -370,7 +410,6 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
 
       {/* Live Crypto Markets */}
       <CryptoPrices />

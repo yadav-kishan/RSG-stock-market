@@ -228,6 +228,7 @@ userRouter.get('/dashboard', async (req, res) => {
             // Financial data
             total_investment: depositedAmountAgg._sum.amount ?? 0, // Total deposited amount (for tracking)
             wallet_balance: depositedAmountAgg._sum.amount ?? 0, // Total Balance = Amount deposited through website
+            package_wallet_balance: Number(wallet.package_balance) || 0, // New package wallet
             total_income: totalIncomeAgg._sum.amount ?? 0, // Total lifetime income from all sources (referral, team, salary)
             total_withdrawal: totalWithdrawalAgg._sum.amount ?? 0,
 

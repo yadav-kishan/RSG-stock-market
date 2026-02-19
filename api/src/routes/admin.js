@@ -497,7 +497,7 @@ adminRouter.post('/withdrawals/reject/:transactionId', async (req, res) => {
  * (Admin Only)
  */
 adminRouter.post('/deposits/manual', async (req, res) => {
-  const { referralCodes, amount } = req.body; // Changed to accept array of codes
+  const { referralCodes, amount, walletType = 'main' } = req.body; // Added walletType
 
   if (!referralCodes || !Array.isArray(referralCodes) || referralCodes.length === 0) {
     return res.status(400).json({ error: 'Please provide at least one referral code.' });
@@ -505,6 +505,10 @@ adminRouter.post('/deposits/manual', async (req, res) => {
 
   if (!amount || isNaN(amount) || amount <= 0) {
     return res.status(400).json({ error: 'Invalid amount. Must be greater than 0.' });
+  }
+
+  if (!['main', 'package'].includes(walletType)) {
+    return res.status(400).json({ error: 'Invalid wallet type. Must be "main" or "package".' });
   }
 
   try {
@@ -537,28 +541,33 @@ adminRouter.post('/deposits/manual', async (req, res) => {
               data: {
                 user_id: user.id,
                 balance: 0,
+                package_balance: 0
               },
             });
           }
 
-          // 3. Update wallet balance
+          // 3. Update wallet balance based on type
+          const updateData = walletType === 'package'
+            ? { package_balance: { increment: Number(amount) } }
+            : { balance: { increment: Number(amount) } };
+
           await prisma.wallets.update({
             where: { user_id: user.id },
-            data: {
-              balance: {
-                increment: Number(amount)
-              }
-            },
+            data: updateData
           });
 
           // 4. Create transaction record
+          const description = walletType === 'package'
+            ? `Admin added funds to Package Wallet. Amount: $${amount}`
+            : `Admin manually added funds. Amount: $${amount}`;
+
           await prisma.transactions.create({
             data: {
               user_id: user.id,
               amount: Number(amount),
               type: 'credit',
-              income_source: 'manual_deposit',
-              description: `Admin manually added funds. Amount: $${amount}`,
+              income_source: walletType === 'package' ? 'admin_package_deposit' : 'manual_deposit',
+              description: description,
               status: 'COMPLETED',
               unlock_date: new Date(), // Immediate access
             },

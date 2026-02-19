@@ -74,6 +74,16 @@ export async function api<T = unknown>(
     console.log('API response status:', res.status, res.statusText);
   }
 
+  if (res.status === 401) {
+    // Session expired or invalid - force logout
+    console.log('401 Unauthorized detected - logging out...');
+    await supabase.auth.signOut();
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please login again.');
+  }
+
   if (!res.ok) {
     let message = 'Request failed';
     try {
@@ -139,6 +149,16 @@ export function apiSync<T = unknown>(
     },
     body: init?.body ? JSON.stringify(init.body) : undefined,
   }).then(async (res) => {
+    if (res.status === 401) {
+      // Session expired or invalid - force logout
+      console.log('401 Unauthorized (sync) detected - logging out...');
+      await supabase.auth.signOut();
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+      throw new Error('Session expired. Please login again.');
+    }
+
     if (!res.ok) {
       let message = 'Request failed';
       try {

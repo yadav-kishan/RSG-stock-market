@@ -136,9 +136,15 @@ class EmailService {
       if (svc === 'resend') {
         if (!this.resend) throw new Error('Resend client not initialized');
 
+        // FORCE FALLBACK if env var is missing/empty, to assume the verified domain
+        // This fixes the issue of defaulting to resend.dev when env is not loaded correctly
+        const finalFrom = from || 'onboarding@rsgstockmarket.com';
+
         console.log(`Sending email via Resend to ${to}...`);
+        console.log(`Debug - Resend From: ${finalFrom} (Env EMAIL_FROM: ${process.env.EMAIL_FROM})`);
+
         const { data, error } = await this.resend.emails.send({
-          from: from,
+          from: finalFrom,
           to: to,
           subject: subject,
           html: htmlContent

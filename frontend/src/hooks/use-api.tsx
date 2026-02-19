@@ -11,6 +11,7 @@ export interface DashboardData {
   join_date: string;
   total_investment: number;
   wallet_balance: number;
+  package_wallet_balance: number;
   total_income: number;
   total_withdrawal: number;
   left_leg_business: number;

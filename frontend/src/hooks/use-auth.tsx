@@ -74,7 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('User synced successfully:', data.user);
       } else {
         console.error('Failed to sync user with backend');
-        // If sync fails, we might want to log them out or retry?
+
+        if (response.status === 401) {
+          console.warn('Sync failed with 401 - Session invalid. Logging out.');
+          await supabase.auth.signOut();
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return;
+        }
+
+        // If sync fails (non-401), we might want to log them out or retry?
         // For now, just set appUser to null
         setAppUser(null);
       }

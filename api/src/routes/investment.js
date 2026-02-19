@@ -38,8 +38,34 @@ investmentRouter.post('/deposit', async (req, res) => {
     }
 
     const newInvestment = await prisma.$transaction(async (tx) => {
+      // 1. Check and Deduct from Package Wallet
+      const wallet = await tx.wallets.findUnique({ where: { user_id: userId } });
+
+      if (!wallet || Number(wallet.package_balance) < amount) {
+        throw new Error(`Insufficient balance in Package Wallet. Available: $${wallet?.package_balance || 0}`);
+      }
+
+      // Deduct from Package Wallet
+      await tx.wallets.update({
+        where: { user_id: userId },
+        data: { package_balance: { decrement: amount } }
+      });
+
+      // Log Debit Transaction for Package Wallet
+      await tx.transactions.create({
+        data: {
+          user_id: userId,
+          amount: amount,
+          type: 'debit',
+          income_source: 'package_investment',
+          description: `Investment purchase using Package Wallet - ${package_name}`,
+          status: 'COMPLETED'
+        }
+      });
+
+      // 2. Create Active Investment Record
       const investmentCount = await tx.investments.count({ where: { user_id: userId } });
-      
+
       const createdInvestment = await tx.investments.create({
         data: {
           user_id: userId,
@@ -53,24 +79,25 @@ investmentRouter.post('/deposit', async (req, res) => {
       });
 
       // Get user info for referral processing
-      const user = await tx.users.findUnique({ 
-        where: { id: userId }, 
-        select: { sponsor_id: true, full_name: true, email: true } 
+      const user = await tx.users.findUnique({
+        where: { id: userId },
+        select: { sponsor_id: true, full_name: true, email: true }
       });
-      
-      // Store deposit with 6-month unlock period (this is the locked investment)
+
+      // 3. Store "Deposit" Transaction for ROI Calculation (Locked Capital)
+      // This is used by the monthly profit distribution job
       const depositTransaction = await tx.transactions.create({
         data: {
           user_id: userId,
           amount: amount,
           type: 'credit',
           income_source: 'investment_deposit',
-          description: `Investment deposit - $${amount} - locked for 6 months`,
+          description: `Investment Active Capital - $${amount} - Locked for 6 months`,
           status: 'COMPLETED',
           unlock_date: new Date(Date.now() + (6 * 30 * 24 * 60 * 60 * 1000)) // 6 months from now
         },
       });
-      
+
       // Process DIRECT INCOME for direct referrer on FIRST deposit only
       if (user?.sponsor_id) {
         // Check if this is user's first deposit/investment
@@ -83,11 +110,11 @@ investmentRouter.post('/deposit', async (req, res) => {
             id: { not: depositTransaction.id } // Exclude current deposit
           }
         });
-        
+
         // Only give direct income for the very first deposit
         if (existingDeposits === 0) {
           const directIncomeAmount = Number((amount * 10 / 100).toFixed(2)); // 10% one-time
-          
+
           if (directIncomeAmount > 0) {
             // Ensure sponsor has a wallet
             await tx.wallets.upsert({
@@ -95,7 +122,7 @@ investmentRouter.post('/deposit', async (req, res) => {
               create: { user_id: user.sponsor_id, balance: directIncomeAmount },
               update: { balance: { increment: directIncomeAmount } }
             });
-            
+
             // Create one-time direct income transaction
             await tx.transactions.create({
               data: {

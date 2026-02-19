@@ -1,264 +1,105 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
+import { requireAuth } from '../middleware/auth.js';
+
 export const walletRouter = Router();
-walletRouter.use(requireAuth);
 
-const depositRequestSchema = z.object({
-  amount: z.number()
-    .min(100, 'Minimum deposit amount is $100')
-    .refine((val) => val % 10 === 0, 'Amount must be in multiples of $10'),
-  blockchain: z.string().min(1, 'Blockchain is required'),
-  transaction_hash: z.string().optional()
+// Schema for P2P transfer
+const p2pTransferSchema = z.object({
+  recipientReferralCode: z.string().min(1, 'Recipient referral code is required'),
+  amount: z.number().min(1, 'Minimum transfer amount is $1')
 });
 
-walletRouter.post('/deposit-request', async (req, res) => {
-  const userId = req.user.id;
-  const parse = depositRequestSchema.safeParse(req.body);
+// P2P Transfer (Package Wallet -> Package Wallet)
+walletRouter.post('/p2p-transfer', requireAuth, async (req, res) => {
+  const parse = p2pTransferSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ error: parse.error.flatten() });
+    return res.status(400).json({ error: parse.error.errors[0].message });
   }
 
-  const { amount, blockchain, transaction_hash } = parse.data;
+  const { recipientReferralCode, amount } = parse.data;
+  const senderId = req.user.id;
 
   try {
-    // Create a PENDING transaction. This does NOT update the wallet balance yet.
-    const depositRequest = await prisma.transactions.create({
-      data: {
-        user_id: userId,
-        amount,
-        type: 'credit',
-        income_source: `${blockchain}_deposit`,
-        status: 'PENDING',
-        description: `User deposit request of $${amount} via ${blockchain}${transaction_hash ? ` (Tx: ${transaction_hash})` : ''}.`,
-      },
+    // 1. Verify Sender has enough balance in Package Wallet
+    const senderWallet = await prisma.wallets.findUnique({
+      where: { user_id: senderId }
     });
-    res.status(201).json({ 
-      message: 'Deposit request submitted successfully. It will be reviewed by an admin.', 
-      request: depositRequest 
-    });
-  } catch (error) {
-    console.error('Deposit request failed:', error);
-    res.status(500).json({ error: 'Failed to submit deposit request.' });
-  }
-});
 
-walletRouter.get('/balance', async (req, res) => {
-  const userId = req.user.id;
-  try {
-    let wallet = await prisma.wallets.findUnique({ where: { user_id: userId } });
-    
-    // If wallet doesn't exist, create one with 0 balance
-    if (!wallet) {
-      wallet = await prisma.wallets.create({
-        data: {
-          user_id: userId,
-          balance: 0,
-        },
-      });
+    if (!senderWallet || Number(senderWallet.package_balance) < amount) {
+      return res.status(400).json({ error: 'Insufficient funds in Package Wallet' });
     }
-    
-    return res.json({ balance: wallet.balance });
-  } catch (error) {
-    console.error('Error in /balance:', error);
-    return res.status(500).json({ error: 'Failed to load balance', details: error.message });
-  }
-});
 
-walletRouter.get('/transactions', async (req, res) => {
-  const userId = req.user.id;
-  const limit = Math.min(Number(req.query.limit ?? 20), 100);
-  const offset = Number(req.query.offset ?? 0);
-  
-  try {
-    // Show completed, rejected, and pending withdrawal transactions to users
-    const items = await prisma.transactions.findMany({
-      where: { 
-        user_id: userId,
-        OR: [
-          { status: 'COMPLETED' },
-          { status: 'REJECTED' },
-          { type: 'WITHDRAWAL', status: 'PENDING' } // Show pending withdrawals
-        ]
-      },
-      orderBy: { timestamp: 'desc' },
-      skip: offset,
-      take: limit,
-      include: {
-        // Include user details if needed
-        users: {
-          select: {
-            full_name: true,
-            email: true
-          }
+    // 2. Find Recipient
+    const recipient = await prisma.users.findUnique({
+      where: { referral_code: recipientReferralCode },
+      select: { id: true, full_name: true, email: true }
+    });
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+
+    if (recipient.id === senderId) {
+      return res.status(400).json({ error: 'Cannot transfer to yourself' });
+    }
+
+    // 3. Execute Transfer Transaction
+    await prisma.$transaction(async (tx) => {
+      // Deduct from Sender
+      await tx.wallets.update({
+        where: { user_id: senderId },
+        data: { package_balance: { decrement: amount } }
+      });
+
+      // Add to Recipient
+      // Upsert recipient wallet just in case
+      await tx.wallets.upsert({
+        where: { user_id: recipient.id },
+        create: {
+          user_id: recipient.id,
+          balance: 0,
+          package_balance: amount
+        },
+        update: {
+          package_balance: { increment: amount }
         }
-      }
-    });
-    
-    const total = await prisma.transactions.count({ 
-      where: { 
-        user_id: userId,
-        OR: [
-          { status: 'COMPLETED' },
-          { status: 'REJECTED' },
-          { type: 'WITHDRAWAL', status: 'PENDING' } // Count pending withdrawals
-        ]
-      } 
-    });
-    
-    return res.json({ 
-      items: items.map(tx => ({
-        ...tx,
-        amount: Number(tx.amount) // Convert Decimal to number for JSON
-      })), 
-      limit, 
-      offset, 
-      total 
-    });
-  } catch (error) {
-    console.error('Failed to load transactions:', error);
-    return res.status(500).json({ 
-      error: 'Failed to load transactions',
-      details: error.message 
-    });
-  }
-});
-
-const withdrawSchema = z.object({ 
-  amount: z.number()
-    .min(10, 'Minimum withdrawal amount is $10')
-    .refine((val) => val % 10 === 0, 'Amount must be in multiples of $10')
-});
-
-walletRouter.post('/withdraw', async (req, res) => {
-  const userId = req.user.id;
-  const parse = withdrawSchema.safeParse(req.body);
-
-  if (!parse.success) {
-    return res.status(400).json({ error: parse.error.flatten() });
-  }
-
-  const { amount } = parse.data;
-
-  try {
-    // Get user's current wallet balance
-    let wallet = await prisma.wallets.findUnique({
-      where: { user_id: userId },
-    });
-
-    // If wallet doesn't exist, create one with 0 balance
-    if (!wallet) {
-      wallet = await prisma.wallets.create({
-        data: {
-          user_id: userId,
-          balance: 0,
-        },
       });
-    }
 
-    // Check if the user has enough balance
-    if (wallet.balance < amount) {
-      return res.status(400).json({ error: 'Insufficient balance' });
-    }
+      // Record Transaction for Sender (Debit)
+      await tx.transactions.create({
+        data: {
+          user_id: senderId,
+          amount: amount,
+          type: 'debit',
+          income_source: 'p2p_transfer_sent',
+          description: `P2P Transfer to ${recipient.full_name} (${recipientReferralCode})`,
+          status: 'COMPLETED'
+        }
+      });
 
-    // Create a PENDING withdrawal transaction (does NOT deduct balance yet)
-    const withdrawalRequest = await prisma.transactions.create({
-      data: {
-        user_id: userId,
-        amount,
-        type: 'WITHDRAWAL',
-        income_source: 'withdrawal_request',
-        status: 'PENDING',
-        description: `Withdrawal request of $${amount} - Awaiting admin approval`,
-      },
+      // Record Transaction for Recipient (Credit)
+      await tx.transactions.create({
+        data: {
+          user_id: recipient.id,
+          amount: amount,
+          type: 'credit',
+          income_source: 'p2p_transfer_received',
+          description: `P2P Transfer received from ${req.user.email}`,
+          status: 'COMPLETED'
+        }
+      });
     });
 
-    res.status(201).json({
-      message: 'Withdrawal request submitted successfully. It will be reviewed by an admin.',
-      request: withdrawalRequest,
+    res.json({
+      success: true,
+      message: `Successfully transferred $${amount} to ${recipient.full_name}`
     });
+
   } catch (error) {
-    console.error('Withdrawal request failed:', error);
-    res.status(500).json({ error: 'Failed to submit withdrawal request.' });
-  }
-});
-
-// Get wallet addresses for deposits
-walletRouter.get('/addresses', async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const addresses = await prisma.wallet_addresses.findMany({
-      where: { 
-        user_id: userId,
-        is_active: true 
-      },
-      select: {
-        blockchain: true,
-        address: true,
-        created_at: true
-      },
-      orderBy: { blockchain: 'asc' }
-    });
-    
-    return res.json({ addresses });
-  } catch (error) {
-    console.error('Failed to load wallet addresses:', error);
-    return res.status(500).json({ 
-      error: 'Failed to load wallet addresses',
-      details: error.message 
-    });
-  }
-});
-
-// Get available blockchains
-walletRouter.get('/blockchains', async (req, res) => {
-  try {
-    const blockchains = [
-      { 
-        name: 'Bitcoin', 
-        symbol: 'BTC', 
-        icon: '₿',
-        minDeposit: 100,
-        minWithdraw: 10
-      },
-      { 
-        name: 'Ethereum', 
-        symbol: 'ETH', 
-        icon: 'Ξ',
-        minDeposit: 100,
-        minWithdraw: 10
-      },
-      { 
-        name: 'Tether USD', 
-        symbol: 'USDT', 
-        icon: '₮',
-        minDeposit: 100,
-        minWithdraw: 10
-      },
-      { 
-        name: 'USD Coin', 
-        symbol: 'USDC', 
-        icon: '$',
-        minDeposit: 100,
-        minWithdraw: 10
-      },
-      { 
-        name: 'Binance Coin', 
-        symbol: 'BNB', 
-        icon: 'B',
-        minDeposit: 100,
-        minWithdraw: 10
-      }
-    ];
-    
-    return res.json({ blockchains });
-  } catch (error) {
-    console.error('Failed to load blockchains:', error);
-    return res.status(500).json({ 
-      error: 'Failed to load blockchains',
-      details: error.message 
-    });
+    console.error('P2P Transfer Error:', error);
+    res.status(500).json({ error: 'Transfer failed' });
   }
 });
