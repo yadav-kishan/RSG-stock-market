@@ -143,7 +143,8 @@ function start() {
   app.listen(port, () => {
     scheduleCommissionJobs();
     const publicUrl = process.env.RENDER_EXTERNAL_URL || frontendUrl || `http://localhost:${port}`;
-    console.log(`Server listening at: ${publicUrl}`);
+    console.log(`Server listening on port: ${port}`);
+    console.log(`Public URL: ${publicUrl}`);
   });
 }
 
