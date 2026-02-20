@@ -411,7 +411,8 @@ const depositSchema = z.object({
   blockchain: z.string().min(1, 'Blockchain selection is required'),
   otp_code: z.string().min(6, 'OTP code is required').max(6, 'OTP code must be 6 digits'),
   transaction_hash: z.string().optional(),
-  screenshot: z.string().optional() // Base64 encoded image
+  screenshot: z.string().optional(), // Base64 encoded image
+  walletType: z.enum(['package', 'investment']).default('package')
 });
 
 authRouter.post('/verify-deposit-otp', requireAuth, async (req, res) => {
@@ -425,7 +426,7 @@ authRouter.post('/verify-deposit-otp', requireAuth, async (req, res) => {
     });
   }
 
-  const { amount, blockchain, otp_code, transaction_hash, screenshot } = parse.data;
+  const { amount, blockchain, otp_code, transaction_hash, screenshot, walletType } = parse.data;
 
   try {
     // Verify OTP first
@@ -467,8 +468,9 @@ authRouter.post('/verify-deposit-otp', requireAuth, async (req, res) => {
       select: { email: true, full_name: true }
     });
 
-    // Create deposit transaction with screenshot and details
-    let descriptionDetails = `Crypto deposit of $${amount} via ${blockchain}`;
+    // Tag deposit with wallet type so admin approval routes to correct wallet
+    const walletTag = walletType === 'investment' ? '[INVESTMENT]' : '[PACKAGE]';
+    let descriptionDetails = `${walletTag} Crypto deposit of $${amount} via ${blockchain}`;
     if (transaction_hash) {
       descriptionDetails += ` (Tx: ${transaction_hash})`;
     }

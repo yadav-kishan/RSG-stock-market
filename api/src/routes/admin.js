@@ -229,7 +229,8 @@ adminRouter.post('/deposits/approve/:transactionId', async (req, res) => {
           id: true,
           user_id: true,
           amount: true,
-          status: true
+          status: true,
+          description: true
         }
       });
 
@@ -263,71 +264,21 @@ adminRouter.post('/deposits/approve/:transactionId', async (req, res) => {
         });
       }
 
-      // 4. Update wallet balance
+      // 4. Determine wallet type from deposit description
+      // Deposits go to Package Wallet by default (user can choose during deposit)
+      const isInvestmentDeposit = transaction.description?.includes('[INVESTMENT]');
+      const updateData = isInvestmentDeposit
+        ? { balance: { increment: Number(transaction.amount) } }
+        : { package_balance: { increment: Number(transaction.amount) } };
+
       await prisma.wallets.update({
         where: { user_id: transaction.user_id },
-        data: {
-          balance: {
-            increment: Number(transaction.amount)
-          }
-        },
+        data: updateData,
       });
 
-      // 5. Process DIRECT INCOME for first deposit only (Level 1 sponsor only)
-      const user = await prisma.users.findUnique({
-        where: { id: transaction.user_id },
-        select: { sponsor_id: true, full_name: true, email: true }
-      });
-
-      if (user?.sponsor_id) {
-        // Check if this is user's first deposit
-        const previousDeposits = await prisma.transactions.count({
-          where: {
-            user_id: transaction.user_id,
-            income_source: 'investment_deposit',
-            status: 'COMPLETED',
-            id: { not: transactionId } // Exclude current transaction
-          }
-        });
-
-        // Only give direct income on FIRST deposit
-        if (previousDeposits === 0) {
-          const directIncomeAmount = Number((transaction.amount * 10 / 100).toFixed(2)); // 10% one-time
-
-          if (directIncomeAmount > 0) {
-            // Ensure sponsor has a wallet
-            await prisma.wallets.upsert({
-              where: { user_id: user.sponsor_id },
-              create: { user_id: user.sponsor_id, balance: directIncomeAmount },
-              update: { balance: { increment: directIncomeAmount } }
-            });
-
-            // Create direct income transaction
-            await prisma.transactions.create({
-              data: {
-                user_id: user.sponsor_id,
-                amount: directIncomeAmount,
-                type: 'credit',
-                income_source: 'direct_income',
-                description: `Direct income (10%) from ${user.full_name || user.email}'s first deposit of $${transaction.amount}`,
-                status: 'COMPLETED',
-                unlock_date: new Date(), // Income is immediately withdrawable
-                referral_level: 1
-              },
-            });
-
-            console.log(`💰 Direct income of $${directIncomeAmount} added for sponsor (first deposit only)`);
-          }
-        } else {
-          console.log(`ℹ️ No direct income - not first deposit for user ${user.full_name || user.email}`);
-        }
-
-        console.log(`✅ Processed direct income for deposit approval: ${user.full_name || user.email} - $${transaction.amount}`);
-      }
-
-      // NOTE: Referral income (Level 2-20) is NOT distributed from deposits.
-      // Referral income is only distributed from monthly investment profits.
-      // See workers.js runMonthlyReferralIncome() or monthlyProfitDistribution.js
+      // NOTE: Direct referral income is now distributed via "Unlock Investment" ($10 fixed).
+      // No referral income is given on individual deposits.
+      // Monthly referral income is distributed via monthlyProfitDistribution.js
 
       return { success: true };
     });
@@ -497,7 +448,7 @@ adminRouter.post('/withdrawals/reject/:transactionId', async (req, res) => {
  * (Admin Only)
  */
 adminRouter.post('/deposits/manual', async (req, res) => {
-  const { referralCodes, amount, walletType = 'main' } = req.body; // Added walletType
+  const { referralCodes, amount, walletType = 'investment' } = req.body;
 
   if (!referralCodes || !Array.isArray(referralCodes) || referralCodes.length === 0) {
     return res.status(400).json({ error: 'Please provide at least one referral code.' });
@@ -507,8 +458,8 @@ adminRouter.post('/deposits/manual', async (req, res) => {
     return res.status(400).json({ error: 'Invalid amount. Must be greater than 0.' });
   }
 
-  if (!['main', 'package'].includes(walletType)) {
-    return res.status(400).json({ error: 'Invalid wallet type. Must be "main" or "package".' });
+  if (!['investment', 'package'].includes(walletType)) {
+    return res.status(400).json({ error: 'Invalid wallet type. Must be "investment" or "package".' });
   }
 
   try {
@@ -546,7 +497,7 @@ adminRouter.post('/deposits/manual', async (req, res) => {
             });
           }
 
-          // 3. Update wallet balance based on type
+          // 3. Update wallet balance based on type (no platform fee for admin deposits)
           const updateData = walletType === 'package'
             ? { package_balance: { increment: Number(amount) } }
             : { balance: { increment: Number(amount) } };
@@ -559,14 +510,14 @@ adminRouter.post('/deposits/manual', async (req, res) => {
           // 4. Create transaction record
           const description = walletType === 'package'
             ? `Admin added funds to Package Wallet. Amount: $${amount}`
-            : `Admin manually added funds. Amount: $${amount}`;
+            : `Admin added funds to Investment Wallet. Amount: $${amount}`;
 
           await prisma.transactions.create({
             data: {
               user_id: user.id,
               amount: Number(amount),
               type: 'credit',
-              income_source: walletType === 'package' ? 'admin_package_deposit' : 'manual_deposit',
+              income_source: walletType === 'package' ? 'admin_package_deposit' : 'admin_investment_deposit',
               description: description,
               status: 'COMPLETED',
               unlock_date: new Date(), // Immediate access

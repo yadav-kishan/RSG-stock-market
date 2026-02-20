@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Copy, Check, Upload, ArrowLeft, Mail, Loader2 } from 'lucide-react';
+import { Copy, Check, Upload, ArrowLeft, Mail, Loader2, Package, TrendingUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -41,6 +42,7 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState<DepositStep>('network');
   const [selectedBlockchain, setSelectedBlockchain] = useState<string>('');
+  const [walletType, setWalletType] = useState<'package' | 'investment'>('package');
   const [copiedAddress, setCopiedAddress] = useState<string>('');
   const [depositAmount, setDepositAmount] = useState<string>('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -142,8 +144,9 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
           amount: parseFloat(depositAmount),
           blockchain: selectedBlockchain,
           otp_code: otpCode,
-          transaction_hash: undefined, // Optional - user can provide if they have it
-          screenshot: screenshotBase64
+          transaction_hash: undefined,
+          screenshot: screenshotBase64,
+          walletType
         }
       });
 
@@ -159,6 +162,7 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
   const resetDialog = () => {
     setCurrentStep('network');
     setSelectedBlockchain('');
+    setWalletType('package');
     setDepositAmount('');
     setScreenshot(null);
     setOtpCode('');
@@ -248,7 +252,43 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
         <div className="space-y-6 py-4">
           {/* Step 1: Network Selection */}
           {currentStep === 'network' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Destination Wallet Selector */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Destination Wallet</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setWalletType('package')}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-sm',
+                      walletType === 'package'
+                        ? 'border-yellow-500 bg-yellow-500/10 text-yellow-500'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:border-yellow-500/50'
+                    )}
+                  >
+                    <Package className="h-5 w-5" />
+                    <span className="font-semibold">Package Wallet</span>
+                    <span className="text-xs opacity-70">For deposits & P2P</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWalletType('investment')}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-sm',
+                      walletType === 'investment'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:border-blue-500/50'
+                    )}
+                  >
+                    <TrendingUp className="h-5 w-5" />
+                    <span className="font-semibold">Investment Wallet</span>
+                    <span className="text-xs opacity-70">Earns monthly profit</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Network Selector */}
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-foreground">Select Network</Label>
                 <Select value={selectedBlockchain} onValueChange={setSelectedBlockchain}>
@@ -272,7 +312,7 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
                 </Select>
               </div>
 
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end pt-2">
                 <Button
                   onClick={() => setCurrentStep('amount')}
                   disabled={!selectedBlockchain}
@@ -376,6 +416,10 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
                         <div className="flex justify-between">
                           <span>Network:</span>
                           <span className="font-medium">{selectedBlockchain}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Destination:</span>
+                          <span className="font-medium">{walletType === 'package' ? '📦 Package Wallet' : '📈 Investment Wallet'}</span>
                         </div>
                       </div>
                     </div>
@@ -567,6 +611,10 @@ const CryptoDepositDialog: React.FC<CryptoDepositDialogProps> = ({
                   <div className="flex justify-between">
                     <span className="text-black">Network:</span>
                     <span className="font-medium text-black">{selectedBlockchain}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-black">Destination:</span>
+                    <span className="font-medium text-black">{walletType === 'package' ? '📦 Package Wallet' : '📈 Investment Wallet'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-black">Status:</span>

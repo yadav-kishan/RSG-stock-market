@@ -58,6 +58,8 @@ model users {
   password_updated_at DateTime?          @db.Timestamp(6)
   country             String?            @db.VarChar(100)
   phone               String?            @db.VarChar(20)
+  investment_unlocked Boolean            @default(false)
+  investment_unlocked_at DateTime?        @db.Timestamp(6)
   investments         investments[]
   transactions        transactions[]
   user_rewards        user_rewards[]

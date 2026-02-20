@@ -18,7 +18,8 @@ import {
   BarChart3,
   UserCheck,
   Loader2,
-  Send
+  Send,
+  ArrowUpRight
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/use-api';
 import { toast } from '@/hooks/use-toast';
@@ -33,6 +34,10 @@ const Dashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isP2PModalOpen, setIsP2PModalOpen] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [showTransferForm, setShowTransferForm] = useState(false);
   const { data, loading, error, refetch } = useDashboardData();
 
   // Fetch additional income data
@@ -96,8 +101,8 @@ const Dashboard: React.FC = () => {
     name: data.user_name,
     referralCode: data.referral_code,
     email: data.user_email,
-    totalBalance: Number(data.wallet_balance), // Amount deposited through website
-    packageBalance: Number(data.package_wallet_balance || 0), // Package Wallet Balance
+    investmentBalance: Number(data.investment_wallet_balance || 0), // Investment Wallet
+    packageBalance: Number(data.package_wallet_balance || 0), // Package Wallet
     totalIncome: Number(data.total_income),
     totalWithdrawal: Number(data.total_withdrawal),
     investment: Number(data.total_investment),
@@ -106,6 +111,8 @@ const Dashboard: React.FC = () => {
     totalBusiness: Number(data.total_business),
     directTeam: data.direct_team,
     totalTeam: data.total_team,
+    investmentUnlocked: data.investment_unlocked ?? false,
+    joinDate: data.join_date,
     // New income data
     directIncome: Number((directIncomeData as any)?.totalDirectIncome || 0),
     levelIncome: Number((levelIncomeData as any)?.totalLevelIncome || 0),
@@ -124,6 +131,55 @@ const Dashboard: React.FC = () => {
   // Generate referral link
   const referralLink = `${window.location.origin}/register?ref=${userStats.referralCode}`;
 
+  // Handle Unlock Investment
+  const handleUnlockInvestment = async () => {
+    if (isUnlocking) return;
+    if (userStats.packageBalance < 100) {
+      alert('Insufficient Package Wallet balance. Need $100 to unlock investment.');
+      return;
+    }
+    if (!confirm('Are you sure you want to unlock investment? $100 will be deducted from your Package Wallet.')) return;
+    setIsUnlocking(true);
+    try {
+      await api('/api/wallet/unlock-investment', { method: 'POST' });
+      alert('Investment unlocked successfully! You can now transfer funds to your Investment Wallet.');
+      refetch();
+    } catch (err: any) {
+      alert(err.message || 'Failed to unlock investment');
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  // Handle Transfer to Investment
+  const handleTransferToInvestment = async () => {
+    const amt = parseInt(transferAmount);
+    if (!amt || amt < 100 || amt % 10 !== 0) {
+      alert('Amount must be minimum $100 and in multiples of $10.');
+      return;
+    }
+    if (userStats.packageBalance < amt + 1) {
+      alert(`Insufficient Package Wallet balance. Need $${amt + 1} ($${amt} + $1 fee).`);
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      await api('/api/wallet/transfer-to-investment', {
+        method: 'POST',
+        body: JSON.stringify({ amount: amt }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      alert(`Successfully transferred $${amt} to Investment Wallet ($1 fee applied).`);
+      setTransferAmount('');
+      setShowTransferForm(false);
+      refetch();
+    } catch (err: any) {
+      alert(err.message || 'Transfer failed');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8">
       {/* P2P Transfer Modal */}
@@ -134,8 +190,10 @@ const Dashboard: React.FC = () => {
         currentBalance={userStats.packageBalance}
       />
 
-      {/* Countdown Timer */}
-      <CountdownTimer />
+      {/* Countdown Timer - only show if investment NOT unlocked */}
+      {!userStats.investmentUnlocked && (
+        <CountdownTimer joinDate={userStats.joinDate} />
+      )}
 
       {/* Header Section */}
       <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/5 rounded-lg p-4 sm:p-6 border border-yellow-500/20">
@@ -204,7 +262,7 @@ const Dashboard: React.FC = () => {
 
       {/* Wallets Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        {/* Package Wallet (For P2P & Investment) */}
+        {/* Package Wallet */}
         <Card className="border-yellow-500/40 bg-yellow-500/5 items-center">
           <CardHeader className="pb-3 text-center sm:text-left">
             <CardTitle className="text-lg sm:text-xl flex items-center justify-center sm:justify-start gap-2 text-yellow-500">
@@ -217,25 +275,85 @@ const Dashboard: React.FC = () => {
               <div className="text-3xl sm:text-4xl font-bold text-white text-center sm:text-left">
                 {showBalance ? `$${userStats.packageBalance.toLocaleString()}` : '****'}
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2">
+                {/* P2P Transfer */}
                 <Button
                   onClick={() => setIsP2PModalOpen(true)}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold flex-1"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold w-full"
                 >
                   <Send className="w-4 h-4 mr-2" />
                   Transfer (P2P)
                 </Button>
-                {/* Investment button could go here/link to investment page */}
+
+                {/* Unlock Investment or Transfer to Investment */}
+                {!userStats.investmentUnlocked ? (
+                  <Button
+                    onClick={handleUnlockInvestment}
+                    disabled={isUnlocking || userStats.packageBalance < 100}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold w-full"
+                  >
+                    {isUnlocking ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Unlocking...</>
+                    ) : (
+                      <><TrendingUp className="w-4 h-4 mr-2" /> Unlock Investment ($100)</>
+                    )}
+                  </Button>
+                ) : (
+                  <>
+                    {!showTransferForm ? (
+                      <Button
+                        onClick={() => setShowTransferForm(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full"
+                      >
+                        <ArrowUpRight className="w-4 h-4 mr-2" />
+                        Transfer to Investment
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col gap-2 p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                        <input
+                          type="number"
+                          value={transferAmount}
+                          onChange={(e) => setTransferAmount(e.target.value)}
+                          placeholder="Min $100, multiples of $10"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                          min={100}
+                          step={10}
+                        />
+                        <p className="text-xs text-muted-foreground">$1 platform fee applies</p>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleTransferToInvestment}
+                            disabled={isTransferring}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex-1"
+                            size="sm"
+                          >
+                            {isTransferring ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                          </Button>
+                          <Button
+                            onClick={() => { setShowTransferForm(false); setTransferAmount(''); }}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* My Investment (Active Income Wallet) */}
+        {/* Investment Wallet */}
         <Card className="border-blue-500/20">
           <CardHeader className="pb-3 sm:pb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-              <CardTitle className="text-lg sm:text-xl">Total Investment</CardTitle>
+              <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+                Investment Wallet
+              </CardTitle>
               <div className="flex items-center gap-2 justify-end">
                 <Button
                   variant="ghost"
@@ -250,10 +368,10 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-500 mb-2 sm:mb-4">
-              {showBalance ? `$${userStats.investment.toLocaleString()}` : '****'}
+              {showBalance ? `$${userStats.investmentBalance.toLocaleString()}` : '****'}
             </div>
             <div className="text-sm text-muted-foreground">
-              Total Active Investment
+              {userStats.investmentUnlocked ? 'Active — Earning Monthly Profit' : 'Locked — Unlock to start earning'}
             </div>
           </CardContent>
         </Card>
@@ -274,7 +392,7 @@ const Dashboard: React.FC = () => {
               ${userStats.directIncome?.toLocaleString() || '0'}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              One-time 10% bonus
+              Fixed $10 referral bonus
             </div>
           </CardContent>
         </Card>

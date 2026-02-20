@@ -4,6 +4,8 @@ import { z } from 'zod';
 import prisma from '../lib/prisma.js';
 export const investmentRouter = Router();
 
+const PLATFORM_FEE = 1; // $1 platform fee
+
 // This middleware ensures that for all subsequent routes on this router,
 // req.user will be defined.
 investmentRouter.use(requireAuth);
@@ -13,13 +15,18 @@ const depositSchema = z.object({
   package_name: z.string().min(1),
 });
 
+/**
+ * Create a new investment from Investment Wallet balance.
+ * Monthly profit is only generated on investments.
+ * $1 platform fee applies.
+ */
 investmentRouter.post('/deposit', async (req, res) => {
   const parse = depositSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
   const { amount, package_name } = parse.data;
-  // In JS, we can directly access req.user after requireAuth has run.
   const userId = req.user.id;
+  const totalDeduction = amount + PLATFORM_FEE;
 
   try {
     const startDate = new Date();
@@ -38,34 +45,54 @@ investmentRouter.post('/deposit', async (req, res) => {
     }
 
     const newInvestment = await prisma.$transaction(async (tx) => {
-      // 1. Check and Deduct from Package Wallet
-      const wallet = await tx.wallets.findUnique({ where: { user_id: userId } });
-
-      if (!wallet || Number(wallet.package_balance) < amount) {
-        throw new Error(`Insufficient balance in Package Wallet. Available: $${wallet?.package_balance || 0}`);
-      }
-
-      // Deduct from Package Wallet
-      await tx.wallets.update({
-        where: { user_id: userId },
-        data: { package_balance: { decrement: amount } }
+      // 1. Check user has unlocked investment
+      const user = await tx.users.findUnique({
+        where: { id: userId },
+        select: { investment_unlocked: true, sponsor_id: true, full_name: true, email: true }
       });
 
-      // Log Debit Transaction for Package Wallet
+      if (!user?.investment_unlocked) {
+        throw new Error('You must unlock investment first.');
+      }
+
+      // 2. Check and Deduct from Investment Wallet (balance) + platform fee
+      const wallet = await tx.wallets.findUnique({ where: { user_id: userId } });
+
+      if (!wallet || Number(wallet.balance) < totalDeduction) {
+        throw new Error(`Insufficient Investment Wallet balance. Need $${totalDeduction} ($${amount} + $${PLATFORM_FEE} fee), have $${wallet?.balance || 0}`);
+      }
+
+      // Deduct from Investment Wallet
+      await tx.wallets.update({
+        where: { user_id: userId },
+        data: { balance: { decrement: totalDeduction } }
+      });
+
+      // Log Debit Transaction
       await tx.transactions.create({
         data: {
           user_id: userId,
           amount: amount,
           type: 'debit',
           income_source: 'package_investment',
-          description: `Investment purchase using Package Wallet - ${package_name}`,
+          description: `Investment purchase from Investment Wallet - ${package_name} (Fee: $${PLATFORM_FEE})`,
           status: 'COMPLETED'
         }
       });
 
-      // 2. Create Active Investment Record
-      const investmentCount = await tx.investments.count({ where: { user_id: userId } });
+      // Record fee transaction
+      await tx.transactions.create({
+        data: {
+          user_id: userId,
+          amount: PLATFORM_FEE,
+          type: 'debit',
+          income_source: 'platform_fee',
+          description: `Platform fee for investment deposit of $${amount}`,
+          status: 'COMPLETED'
+        }
+      });
 
+      // 3. Create Active Investment Record
       const createdInvestment = await tx.investments.create({
         data: {
           user_id: userId,
@@ -78,15 +105,8 @@ investmentRouter.post('/deposit', async (req, res) => {
         },
       });
 
-      // Get user info for referral processing
-      const user = await tx.users.findUnique({
-        where: { id: userId },
-        select: { sponsor_id: true, full_name: true, email: true }
-      });
-
-      // 3. Store "Deposit" Transaction for ROI Calculation (Locked Capital)
-      // This is used by the monthly profit distribution job
-      const depositTransaction = await tx.transactions.create({
+      // 4. Store "Deposit" Transaction for ROI Calculation (Locked Capital)
+      await tx.transactions.create({
         data: {
           user_id: userId,
           amount: amount,
@@ -94,57 +114,20 @@ investmentRouter.post('/deposit', async (req, res) => {
           income_source: 'investment_deposit',
           description: `Investment Active Capital - $${amount} - Locked for 6 months`,
           status: 'COMPLETED',
-          unlock_date: new Date(Date.now() + (6 * 30 * 24 * 60 * 60 * 1000)) // 6 months from now
+          unlock_date: new Date(Date.now() + (6 * 30 * 24 * 60 * 60 * 1000))
         },
       });
 
-      // Process DIRECT INCOME for direct referrer on FIRST deposit only
-      if (user?.sponsor_id) {
-        // Check if this is user's first deposit/investment
-        const existingDeposits = await tx.transactions.count({
-          where: {
-            user_id: userId,
-            type: 'credit',
-            income_source: 'investment_deposit',
-            status: 'COMPLETED',
-            id: { not: depositTransaction.id } // Exclude current deposit
-          }
-        });
+      // NOTE: Referral income is now distributed on "Unlock Investment" only.
+      // No direct income on individual deposits.
 
-        // Only give direct income for the very first deposit
-        if (existingDeposits === 0) {
-          const directIncomeAmount = Number((amount * 10 / 100).toFixed(2)); // 10% one-time
-
-          if (directIncomeAmount > 0) {
-            // Ensure sponsor has a wallet
-            await tx.wallets.upsert({
-              where: { user_id: user.sponsor_id },
-              create: { user_id: user.sponsor_id, balance: directIncomeAmount },
-              update: { balance: { increment: directIncomeAmount } }
-            });
-
-            // Create one-time direct income transaction
-            await tx.transactions.create({
-              data: {
-                user_id: user.sponsor_id,
-                amount: directIncomeAmount,
-                type: 'credit',
-                income_source: 'direct_income',
-                description: `Direct income (10%) from ${user.full_name || user.email}'s first deposit of $${amount}`,
-                status: 'COMPLETED',
-                referral_level: 1
-              },
-            });
-          }
-        }
-      }
       return createdInvestment;
     });
 
     return res.status(201).json(newInvestment);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Deposit failed' });
+    return res.status(500).json({ error: err.message || 'Deposit failed' });
   }
 });
 

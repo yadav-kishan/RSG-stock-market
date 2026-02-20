@@ -81,7 +81,7 @@ userRouter.get('/dashboard', async (req, res) => {
         // Get user profile info
         const user = await prisma.users.findUnique({
             where: { id: userId },
-            select: { full_name: true, email: true, referral_code: true, created_at: true, country: true, phone: true }
+            select: { full_name: true, email: true, referral_code: true, created_at: true, country: true, phone: true, investment_unlocked: true, investment_unlocked_at: true }
         });
 
         // Get total deposited amount (for investment tracking)
@@ -226,11 +226,15 @@ userRouter.get('/dashboard', async (req, res) => {
             phone: user?.phone ?? null,
 
             // Financial data
-            total_investment: depositedAmountAgg._sum.amount ?? 0, // Total deposited amount (for tracking)
-            wallet_balance: depositedAmountAgg._sum.amount ?? 0, // Total Balance = Amount deposited through website
-            package_wallet_balance: Number(wallet.package_balance) || 0, // New package wallet
-            total_income: totalIncomeAgg._sum.amount ?? 0, // Total lifetime income from all sources (referral, team, salary)
+            total_investment: depositedAmountAgg._sum.amount ?? 0,
+            investment_wallet_balance: Number(wallet.balance) || 0, // Investment Wallet (balance field)
+            package_wallet_balance: Number(wallet.package_balance) || 0, // Package Wallet
+            total_income: totalIncomeAgg._sum.amount ?? 0,
             total_withdrawal: totalWithdrawalAgg._sum.amount ?? 0,
+
+            // Investment unlock status
+            investment_unlocked: user?.investment_unlocked ?? false,
+            investment_unlocked_at: user?.investment_unlocked_at ?? null,
 
             // Business data
             left_leg_business: leftLegBusinessAgg._sum.amount ?? 0,
@@ -1225,8 +1229,9 @@ userRouter.get('/wallet-balance', async (req, res) => {
 // Deposit submission endpoint with OTP verification and file upload
 userRouter.post('/submit-deposit', upload.single('screenshot'), async (req, res) => {
     const userId = req.user.id;
-    const { amount, blockchain, otpCode, walletAddress } = req.body;
+    const { amount, blockchain, otpCode, walletAddress, walletType } = req.body;
     const screenshotFile = req.file;
+    const depositWalletType = walletType === 'investment' ? 'investment' : 'package'; // default to package
 
     try {
         // Validate input
@@ -1273,6 +1278,7 @@ userRouter.post('/submit-deposit', upload.single('screenshot'), async (req, res)
         });
 
         // Create deposit transaction record
+        const walletTag = depositWalletType === 'investment' ? '[INVESTMENT]' : '[PACKAGE]';
         const transaction = await prisma.transactions.create({
             data: {
                 user_id: userId,
@@ -1280,7 +1286,7 @@ userRouter.post('/submit-deposit', upload.single('screenshot'), async (req, res)
                 type: 'DEPOSIT',
                 income_source: blockchain,
                 status: 'PENDING',
-                description: `${blockchain} deposit request - $${depositAmount} - Screenshot: ${screenshotFile.filename} - Wallet: ${walletAddress}`,
+                description: `${walletTag} ${blockchain} deposit request - $${depositAmount} - Screenshot: ${screenshotFile.filename} - Wallet: ${walletAddress}`,
             },
         });
 

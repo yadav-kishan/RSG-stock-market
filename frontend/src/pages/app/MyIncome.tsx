@@ -4,9 +4,9 @@ import { api } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { 
-  DollarSign, 
-  Calendar, 
+import {
+  DollarSign,
+  Calendar,
   PieChart,
   Wallet,
   ArrowUpRight,
@@ -29,7 +29,7 @@ import {
 type DashboardData = {
   total_income: number;
   total_withdrawal: number;
-  wallet_balance: number;
+  investment_wallet_balance: number;
   income_breakdown: Array<{
     source: string;
     amount: number;
@@ -55,19 +55,19 @@ type IncomeBreakdown = Array<{
 }>;
 
 const MyIncome: React.FC = () => {
-  const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({ 
-    queryKey: ['dashboard'], 
-    queryFn: () => api<DashboardData>('/api/user/dashboard') 
+  const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
+    queryKey: ['dashboard'],
+    queryFn: () => api<DashboardData>('/api/user/dashboard')
   });
 
-  const { data: profitHistory, isLoading: historyLoading } = useQuery<ProfitHistory>({ 
-    queryKey: ['profit-history'], 
-    queryFn: () => api<ProfitHistory>('/api/user/profit-history') 
+  const { data: profitHistory, isLoading: historyLoading } = useQuery<ProfitHistory>({
+    queryKey: ['profit-history'],
+    queryFn: () => api<ProfitHistory>('/api/user/profit-history')
   });
 
-  const { data: incomeBreakdown, isLoading: breakdownLoading } = useQuery<IncomeBreakdown>({ 
-    queryKey: ['income-breakdown'], 
-    queryFn: () => api<IncomeBreakdown>('/api/user/income-breakdown') 
+  const { data: incomeBreakdown, isLoading: breakdownLoading } = useQuery<IncomeBreakdown>({
+    queryKey: ['income-breakdown'],
+    queryFn: () => api<IncomeBreakdown>('/api/user/income-breakdown')
   });
 
   const formatCurrency = (amount: number) => {
@@ -128,7 +128,7 @@ const MyIncome: React.FC = () => {
     color: getIncomeSourceColor(item.source)
   })) || [];
 
-  const availableBalance = Number(dashboardData?.wallet_balance || 0);
+  const availableBalance = Number(dashboardData?.investment_wallet_balance || 0);
   const totalIncome = Number(dashboardData?.total_income || 0);
   const totalWithdrawal = Number(dashboardData?.total_withdrawal || 0);
   const netIncome = totalIncome - totalWithdrawal;
@@ -142,7 +142,7 @@ const MyIncome: React.FC = () => {
             Comprehensive overview of your earnings and income sources
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -153,7 +153,7 @@ const MyIncome: React.FC = () => {
             </Card>
           ))}
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardContent className="p-6">
@@ -193,7 +193,7 @@ const MyIncome: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -206,7 +206,7 @@ const MyIncome: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -238,15 +238,15 @@ const MyIncome: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis tickFormatter={(value) => `$${value}`} />
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value) => [formatCurrency(Number(value)), 'Income']}
                     labelFormatter={(label) => `Month: ${label}`}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="profit" 
-                    stroke="#f59e0b" 
-                    fill="#f59e0b" 
+                  <Area
+                    type="monotone"
+                    dataKey="profit"
+                    stroke="#f59e0b"
+                    fill="#f59e0b"
                     fillOpacity={0.3}
                   />
                 </AreaChart>
@@ -299,8 +299,8 @@ const MyIncome: React.FC = () => {
             {incomeBreakdown?.map((item) => (
               <div key={item.source} className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <div 
-                    className="w-4 h-4 rounded-full" 
+                  <div
+                    className="w-4 h-4 rounded-full"
                     style={{ backgroundColor: getIncomeSourceColor(item.source) }}
                   />
                   <div>
@@ -331,39 +331,39 @@ const MyIncome: React.FC = () => {
               ?.filter(transaction => transaction.type === 'credit')
               ?.slice(0, 10)
               ?.map((transaction) => (
-              <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <ArrowUpRight className="h-5 w-5 text-green-600" />
+                <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <ArrowUpRight className="h-5 w-5 text-green-600" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2 mb-1">
+                        <p className="font-medium">{formatCurrency(Number(transaction.amount))}</p>
+                        <Badge style={{ backgroundColor: getIncomeSourceColor(transaction.income_source) }}>
+                          {getIncomeSourceName(transaction.income_source)}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{transaction.description}</p>
                     </div>
                   </div>
-                  <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <p className="font-medium">{formatCurrency(Number(transaction.amount))}</p>
-                      <Badge style={{ backgroundColor: getIncomeSourceColor(transaction.income_source) }}>
-                        {getIncomeSourceName(transaction.income_source)}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{transaction.description}</p>
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">{formatDate(transaction.timestamp)}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">{formatDate(transaction.timestamp)}</p>
-                </div>
-              </div>
-            ))}
-            
-            {(!dashboardData?.recent_transactions || 
+              ))}
+
+            {(!dashboardData?.recent_transactions ||
               dashboardData.recent_transactions.filter(t => t.type === 'credit').length === 0) && (
-              <div className="text-center py-8">
-                <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-lg font-medium text-muted-foreground">No income transactions yet</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Start earning by making investments and referring others
-                </p>
-              </div>
-            )}
+                <div className="text-center py-8">
+                  <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-lg font-medium text-muted-foreground">No income transactions yet</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Start earning by making investments and referring others
+                  </p>
+                </div>
+              )}
           </div>
         </CardContent>
       </Card>

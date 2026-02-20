@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 
 interface TimeLeft {
     days: number;
@@ -8,16 +7,26 @@ interface TimeLeft {
     seconds: number;
 }
 
-const CountdownTimer: React.FC = () => {
-    // Set target date to 365 days from now (simulated launch countdown)
-    // In a real app, this might come from an API or config
+interface CountdownTimerProps {
+    joinDate?: string | null;
+}
+
+const CountdownTimer: React.FC<CountdownTimerProps> = ({ joinDate }) => {
+    // Calculate target date: 365 days from join date
     const [targetDate] = useState(() => {
+        if (joinDate) {
+            const date = new Date(joinDate);
+            date.setFullYear(date.getFullYear() + 1);
+            return date.getTime();
+        }
+        // Fallback: 365 days from now
         const date = new Date();
         date.setDate(date.getDate() + 365);
         return date.getTime();
     });
 
     const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+    const [expired, setExpired] = useState(false);
 
     useEffect(() => {
         const calculateTimeLeft = () => {
@@ -31,8 +40,10 @@ const CountdownTimer: React.FC = () => {
                     minutes: Math.floor((difference / 1000 / 60) % 60),
                     seconds: Math.floor((difference / 1000) % 60),
                 });
+                setExpired(false);
             } else {
                 setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+                setExpired(true);
             }
         };
 
@@ -57,8 +68,15 @@ const CountdownTimer: React.FC = () => {
         <div className="w-full mb-6">
             <div className="text-center mb-4">
                 <h3 className="text-xl font-bold text-yellow-500 uppercase tracking-widest">
-                    <span className="border-l-4 border-yellow-500 pl-2">Get Tokens</span> Before Time Up
+                    {expired ? (
+                        <span className="text-red-500 border-l-4 border-red-500 pl-2">ID Validity Expired</span>
+                    ) : (
+                        <span className="border-l-4 border-yellow-500 pl-2">ID Validity</span>
+                    )}
                 </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                    {expired ? 'Unlock Investment to continue using the platform' : 'Unlock Investment to remove this timer'}
+                </p>
             </div>
             <div className="grid grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto">
                 <TimeBlock value={timeLeft.days} label="Days" />

@@ -6,12 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { PlusCircle, Loader2, Info } from 'lucide-react';
+import { PlusCircle, Loader2, Info, Package, TrendingUp } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 export default function AddFunds() {
     const [referralCodes, setReferralCodes] = useState('');
     const [amount, setAmount] = useState('');
+    const [walletType, setWalletType] = useState<'package' | 'investment'>('package');
+
     interface ManualDepositResponse {
         message: string;
         results: {
@@ -22,7 +25,7 @@ export default function AddFunds() {
 
     const [results, setResults] = useState<ManualDepositResponse['results'] | null>(null);
 
-    const addFundsMutation = useMutation<ManualDepositResponse, Error, { referralCodes: string[], amount: number }>({
+    const addFundsMutation = useMutation<ManualDepositResponse, Error, { referralCodes: string[]; amount: number; walletType: string }>({
         mutationFn: (data) =>
             api('/api/admin/deposits/manual', {
                 method: 'POST',
@@ -41,7 +44,6 @@ export default function AddFunds() {
                     toast.error(`Failed to add funds to ${failCount} user(s)`);
                 }
 
-                // Reset form if all successful
                 if (failCount === 0) {
                     setReferralCodes('');
                     setAmount('');
@@ -60,7 +62,6 @@ export default function AddFunds() {
             return;
         }
 
-        // Split by newlines or commas and clean up
         const codes = referralCodes
             .split(/[\n,]+/)
             .map(code => code.trim())
@@ -73,7 +74,8 @@ export default function AddFunds() {
 
         addFundsMutation.mutate({
             referralCodes: codes,
-            amount: Number(amount)
+            amount: Number(amount),
+            walletType
         });
     };
 
@@ -92,11 +94,49 @@ export default function AddFunds() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
+
+                        {/* Wallet Type Selector */}
+                        <div className="space-y-2">
+                            <Label>Destination Wallet</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setWalletType('package')}
+                                    className={cn(
+                                        'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
+                                        walletType === 'package'
+                                            ? 'border-yellow-500 bg-yellow-500/10 text-yellow-500'
+                                            : 'border-border bg-muted/30 text-muted-foreground hover:border-yellow-500/50'
+                                    )}
+                                >
+                                    <Package className="h-6 w-6" />
+                                    <span className="font-semibold text-sm">Package Wallet</span>
+                                    <span className="text-xs opacity-70">For deposits & P2P</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setWalletType('investment')}
+                                    className={cn(
+                                        'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
+                                        walletType === 'investment'
+                                            ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                                            : 'border-border bg-muted/30 text-muted-foreground hover:border-blue-500/50'
+                                    )}
+                                >
+                                    <TrendingUp className="h-6 w-6" />
+                                    <span className="font-semibold text-sm">Investment Wallet</span>
+                                    <span className="text-xs opacity-70">Earns monthly profit</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Referral Codes */}
                         <div className="space-y-2">
                             <Label htmlFor="referralCodes">Referral Codes</Label>
                             <Textarea
                                 id="referralCodes"
-                                placeholder="Enter referral codes (one per line or comma separated)&#10;Example:&#10;RSG123456&#10;RSG789012"
+                                placeholder={`Enter referral codes (one per line or comma separated)\nExample:\nRSG123456\nRSG789012`}
                                 value={referralCodes}
                                 onChange={(e) => setReferralCodes(e.target.value)}
                                 className="min-h-[120px] font-mono"
@@ -107,6 +147,7 @@ export default function AddFunds() {
                             </p>
                         </div>
 
+                        {/* Amount */}
                         <div className="space-y-2">
                             <Label htmlFor="amount">Amount ($)</Label>
                             <Input
@@ -120,9 +161,28 @@ export default function AddFunds() {
                             />
                         </div>
 
+                        {/* Summary */}
+                        {amount && (
+                            <div className={cn(
+                                'text-sm p-3 rounded-lg border',
+                                walletType === 'package'
+                                    ? 'bg-yellow-500/5 border-yellow-500/20 text-yellow-600'
+                                    : 'bg-blue-500/5 border-blue-500/20 text-blue-600'
+                            )}>
+                                ${Number(amount).toFixed(2)} will be added to each user's{' '}
+                                <strong>{walletType === 'package' ? 'Package Wallet' : 'Investment Wallet'}</strong>.
+                                No platform fee is applied for admin deposits.
+                            </div>
+                        )}
+
                         <Button
                             type="submit"
-                            className="w-full"
+                            className={cn(
+                                'w-full font-semibold',
+                                walletType === 'package'
+                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-black'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            )}
                             disabled={addFundsMutation.isPending}
                         >
                             {addFundsMutation.isPending ? (
@@ -131,7 +191,7 @@ export default function AddFunds() {
                                     Processing...
                                 </>
                             ) : (
-                                'Add Funds'
+                                `Add to ${walletType === 'package' ? 'Package Wallet' : 'Investment Wallet'}`
                             )}
                         </Button>
                     </form>
