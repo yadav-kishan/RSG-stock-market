@@ -18,7 +18,8 @@ const Header = () => {
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                <span>123 Financial District, Crypto City, CC 12345</span>
+                <span className="hidden sm:inline">Department of Economy and Tourism (DET), Al Farah St, Deira, Dubai</span>
+                <span className="sm:hidden">Deira, Dubai</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4" />
@@ -30,7 +31,7 @@ const Header = () => {
               </div>
             </div>
             <div className="hidden md:block font-semibold">
-              WELCOME TO FOX TRADING & INVESTMENT CO.
+              WELCOME TO RSG STOCK MARKET
             </div>
           </div>
         </div>

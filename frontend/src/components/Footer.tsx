@@ -1,5 +1,4 @@
 import { Facebook, Twitter, Linkedin, Instagram, Mail, Phone, MapPin } from 'lucide-react';
-import foxLogo from '@/assets/fox-logo.png';
 
 const Footer = () => {
   return (
@@ -10,8 +9,8 @@ const Footer = () => {
           <div className="lg:col-span-1">
             <div className="flex items-center gap-3 mb-6">
               <img
-                src={foxLogo}
-                alt="Fox Trading Logo"
+                src="/logo.jpg"
+                alt="RSG Stock Market Logo"
                 className="h-12 w-12 object-contain"
               />
               <div>
@@ -128,9 +127,9 @@ const Footer = () => {
                 <MapPin className="h-5 w-5 text-gold mt-1 flex-shrink-0" />
                 <div>
                   <p className="text-gray-300">
-                    123 Financial District<br />
-                    Crypto City, CC 12345<br />
-                    United States
+                    Department of Economy and Tourism (DET)<br />
+                    Al Farah Street, Deira<br />
+                    near Dubai Clock Tower, Dubai, UAE
                   </p>
                 </div>
               </div>
@@ -138,10 +137,10 @@ const Footer = () => {
               <div className="flex items-center gap-3">
                 <Mail className="h-5 w-5 text-gold" />
                 <a
-                  href="mailto:support@foxtrading.com"
+                  href="mailto:support@rsgstockmarket.com"
                   className="text-gray-300 hover:text-gold transition-colors"
                 >
-                  support@foxtrading.com
+                  support@rsgstockmarket.com
                 </a>
               </div>
 
@@ -170,7 +169,7 @@ const Footer = () => {
         <div className="border-t border-gray-700 mt-12 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-gray-400 text-sm">
-              © 2025 Fox Trading and Investment Co. All Rights Reserved.
+              © 2025 RSG Stock Market & Investment Co. All Rights Reserved.
             </div>
             <div className="flex items-center gap-6 text-sm text-gray-400">
               <span>Made with ❤️ for crypto traders</span>
