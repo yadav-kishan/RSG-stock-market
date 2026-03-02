@@ -26,6 +26,7 @@ import { toast } from '@/hooks/use-toast';
 import CryptoPrices from '@/components/CryptoPrices';
 import CountdownTimer from '@/components/CountdownTimer';
 import P2PTransferModal from '@/components/P2PTransferModal';
+import MonthlyProfitModal from '@/components/MonthlyProfitModal';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
@@ -38,6 +39,15 @@ const Dashboard: React.FC = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
   const [showTransferForm, setShowTransferForm] = useState(false);
+
+  const [isTransferringToPackage, setIsTransferringToPackage] = useState(false);
+  const [showIncomeToPackageForm, setShowIncomeToPackageForm] = useState(false);
+  const [incomeToPackageAmount, setIncomeToPackageAmount] = useState('');
+
+  const [isReinvesting, setIsReinvesting] = useState(false);
+  const [showReinvestForm, setShowReinvestForm] = useState(false);
+  const [reinvestAmount, setReinvestAmount] = useState('');
+  const [isProfitModalOpen, setIsProfitModalOpen] = useState(false);
   const { data, loading, error, refetch } = useDashboardData();
 
   // Fetch additional income data
@@ -103,6 +113,7 @@ const Dashboard: React.FC = () => {
     email: data.user_email,
     investmentBalance: Number(data.investment_wallet_balance || 0), // Investment Wallet
     packageBalance: Number(data.package_wallet_balance || 0), // Package Wallet
+    incomeBalance: Number(data.income_wallet_balance || 0), // Total Income Wallet
     totalIncome: Number(data.total_income),
     totalWithdrawal: Number(data.total_withdrawal),
     investment: Number(data.total_investment),
@@ -180,6 +191,68 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Handle Transfer Income to Package
+  const handleTransferToPackage = async () => {
+    const amt = parseInt(incomeToPackageAmount);
+    if (!amt || amt < 10 || amt % 10 !== 0) {
+      alert('Amount must be minimum $10 and in multiples of $10.');
+      return;
+    }
+    if (userStats.incomeBalance < amt + 1) {
+      alert(`Insufficient Income Wallet balance. Need $${amt + 1} ($${amt} + $1 fee).`);
+      return;
+    }
+    setIsTransferringToPackage(true);
+    try {
+      await api('/api/wallet/income-to-package', {
+        method: 'POST',
+        body: JSON.stringify({ amount: amt }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      alert(`Successfully transferred $${amt} to Package Wallet ($1 fee applied).`);
+      setIncomeToPackageAmount('');
+      setShowIncomeToPackageForm(false);
+      refetch();
+    } catch (err: any) {
+      alert(err.message || 'Transfer failed');
+    } finally {
+      setIsTransferringToPackage(false);
+    }
+  };
+
+  // Handle Reinvest (Income -> Investment)
+  const handleReinvest = async () => {
+    const amt = parseInt(reinvestAmount);
+    if (!amt || amt < 100 || amt % 10 !== 0) {
+      alert('Amount must be minimum $100 and in multiples of $10.');
+      return;
+    }
+    if (!userStats.investmentUnlocked) {
+      alert('You must unlock investment first before reinvesting.');
+      return;
+    }
+    if (userStats.incomeBalance < amt + 1) {
+      alert(`Insufficient Income Wallet balance. Need $${amt + 1} ($${amt} + $1 fee).`);
+      return;
+    }
+    setIsReinvesting(true);
+    try {
+      await api('/api/wallet/income-to-investment', {
+        method: 'POST',
+        body: JSON.stringify({ amount: amt }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      alert(`Successfully reinvested $${amt} into Investment Wallet ($1 fee applied).`);
+      setReinvestAmount('');
+      setShowReinvestForm(false);
+      refetch();
+    } catch (err: any) {
+      alert(err.message || 'Reinvestment failed');
+    } finally {
+      setIsReinvesting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8">
       {/* P2P Transfer Modal */}
@@ -188,6 +261,10 @@ const Dashboard: React.FC = () => {
         onClose={() => setIsP2PModalOpen(false)}
         onSuccess={refetch}
         currentBalance={userStats.packageBalance}
+      />
+      <MonthlyProfitModal
+        isOpen={isProfitModalOpen}
+        onClose={() => setIsProfitModalOpen(false)}
       />
 
       {/* Countdown Timer - only show if investment NOT unlocked */}
@@ -261,7 +338,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Wallets Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Package Wallet */}
         <Card className="border-yellow-500/40 bg-yellow-500/5 items-center">
           <CardHeader className="pb-3 text-center sm:text-left">
@@ -370,8 +447,127 @@ const Dashboard: React.FC = () => {
             <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-500 mb-2 sm:mb-4">
               {showBalance ? `$${userStats.investmentBalance.toLocaleString()}` : '****'}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {userStats.investmentUnlocked ? 'Active — Earning Monthly Profit' : 'Locked — Unlock to start earning'}
+            <div className="text-sm text-muted-foreground mb-3">
+              {userStats.investmentUnlocked ? 'Active — Earning 2% Monthly Profit' : 'Locked — Unlock to start earning'}
+            </div>
+            <button
+              onClick={() => setIsProfitModalOpen(true)}
+              className="w-full text-xs py-2 px-3 rounded-md border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2"
+            >
+              <TrendingUp className="h-3 w-3" />
+              View Monthly Profit
+            </button>
+          </CardContent>
+        </Card>
+
+        {/* Total Income Wallet */}
+        <Card className="border-green-500/40 bg-green-500/5 items-center">
+          <CardHeader className="pb-3 text-center sm:text-left">
+            <CardTitle className="text-lg sm:text-xl flex items-center justify-center sm:justify-start gap-2 text-green-500">
+              <DollarSign className="h-5 w-5" />
+              Total Income Wallet
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-6">
+            <div className="flex flex-col gap-4">
+              <div className="text-3xl sm:text-4xl font-bold text-white text-center sm:text-left mb-2">
+                {showBalance ? `$${userStats.incomeBalance.toLocaleString()}` : '****'}
+              </div>
+              <div className="flex flex-col gap-2">
+                {/* Transfer to Package Button */}
+                {!showIncomeToPackageForm ? (
+                  <Button
+                    onClick={() => { setShowIncomeToPackageForm(true); setShowReinvestForm(false); }}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold w-full"
+                    disabled={userStats.incomeBalance < 11}
+                  >
+                    <ArrowUpRight className="w-4 h-4 mr-2" />
+                    Move to Package
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <input
+                      type="number"
+                      value={incomeToPackageAmount}
+                      onChange={(e) => setIncomeToPackageAmount(e.target.value)}
+                      placeholder="Min $10, multiples of $10"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                      min={10}
+                      step={10}
+                    />
+                    <p className="text-xs text-muted-foreground">$1 platform fee applies</p>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleTransferToPackage}
+                        disabled={isTransferringToPackage}
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold flex-1"
+                        size="sm"
+                      >
+                        {isTransferringToPackage ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                      </Button>
+                      <Button
+                        onClick={() => { setShowIncomeToPackageForm(false); setIncomeToPackageAmount(''); }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Reinvest Button */}
+                {!showReinvestForm ? (
+                  <Button
+                    onClick={() => { setShowReinvestForm(true); setShowIncomeToPackageForm(false); }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full"
+                    disabled={userStats.incomeBalance < 101 || !userStats.investmentUnlocked}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Reinvest
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2 p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                    <input
+                      type="number"
+                      value={reinvestAmount}
+                      onChange={(e) => setReinvestAmount(e.target.value)}
+                      placeholder="Min $100, multiples of $10"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                      min={100}
+                      step={10}
+                    />
+                    <p className="text-xs text-muted-foreground">$1 platform fee applies</p>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleReinvest}
+                        disabled={isReinvesting}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex-1"
+                        size="sm"
+                      >
+                        {isReinvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                      </Button>
+                      <Button
+                        onClick={() => { setShowReinvestForm(false); setReinvestAmount(''); }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Withdraw Button */}
+                <Button
+                  onClick={() => window.location.href = '/app/withdrawal'}
+                  variant="outline"
+                  className="border-green-500 text-green-500 hover:bg-green-500 hover:text-white w-full"
+                  disabled={userStats.incomeBalance < 10}
+                >
+                  Withdraw
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

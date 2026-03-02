@@ -12,6 +12,7 @@ export interface DashboardData {
   total_investment: number;
   investment_wallet_balance: number;
   package_wallet_balance: number;
+  income_wallet_balance: number;
   investment_unlocked: boolean;
   investment_unlocked_at: string | null;
   total_income: number;

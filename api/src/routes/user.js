@@ -229,6 +229,7 @@ userRouter.get('/dashboard', async (req, res) => {
             total_investment: depositedAmountAgg._sum.amount ?? 0,
             investment_wallet_balance: Number(wallet.balance) || 0, // Investment Wallet (balance field)
             package_wallet_balance: Number(wallet.package_balance) || 0, // Package Wallet
+            income_wallet_balance: Number(wallet.income_balance) || 0, // Total Income Wallet
             total_income: totalIncomeAgg._sum.amount ?? 0,
             total_withdrawal: totalWithdrawalAgg._sum.amount ?? 0,
 
@@ -257,6 +258,51 @@ userRouter.get('/dashboard', async (req, res) => {
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: 'Failed to load dashboard' });
+    }
+});
+
+// GET /api/user/profit-summary
+// Returns current investment balance + projected 2% monthly profit + past payouts
+userRouter.get('/profit-summary', async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const wallet = await prisma.wallets.findUnique({
+            where: { user_id: userId },
+            select: { balance: true, income_balance: true }
+        });
+
+        const investmentBalance = Number(wallet?.balance || 0);
+        const projectedMonthlyProfit = parseFloat((investmentBalance * 0.02).toFixed(2));
+
+        // Last 12 months of trading bonus payouts
+        const profitHistory = await prisma.transactions.findMany({
+            where: {
+                user_id: userId,
+                income_source: 'trading_bonus',
+                status: 'COMPLETED'
+            },
+            select: { amount: true, timestamp: true, description: true },
+            orderBy: { timestamp: 'desc' },
+            take: 12
+        });
+
+        const totalProfitEarned = profitHistory.reduce((s, t) => s + Number(t.amount), 0);
+
+        return res.json({
+            investment_wallet_balance: investmentBalance,
+            projected_monthly_profit: projectedMonthlyProfit,
+            profit_rate_percent: 2,
+            income_wallet_balance: Number(wallet?.income_balance || 0),
+            total_profit_earned: parseFloat(totalProfitEarned.toFixed(2)),
+            profit_history: profitHistory.map(t => ({
+                amount: Number(t.amount),
+                date: t.timestamp,
+                description: t.description
+            }))
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to load profit summary' });
     }
 });
 

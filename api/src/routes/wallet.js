@@ -65,8 +65,8 @@ walletRouter.post('/unlock-investment', requireAuth, async (req, res) => {
       if (user.sponsor_id) {
         await tx.wallets.upsert({
           where: { user_id: user.sponsor_id },
-          create: { user_id: user.sponsor_id, balance: REFERRAL_BONUS, package_balance: 0 },
-          update: { balance: { increment: REFERRAL_BONUS } }
+          create: { user_id: user.sponsor_id, balance: 0, package_balance: 0, income_balance: REFERRAL_BONUS },
+          update: { income_balance: { increment: REFERRAL_BONUS } }
         });
 
         await tx.transactions.create({
@@ -289,5 +289,116 @@ walletRouter.post('/p2p-transfer', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('P2P Transfer Error:', error);
     res.status(500).json({ error: 'Transfer failed' });
+  }
+});
+
+// ============================================================
+// TRANSFER: Income Wallet → Package Wallet
+// Min $10, multiples of $10, $1 platform fee
+// ============================================================
+const incomeToPackageSchema = z.object({
+  amount: z.number()
+    .min(10, 'Minimum transfer amount is $10')
+    .refine(val => val % 10 === 0, 'Amount must be in multiples of $10'),
+});
+
+walletRouter.post('/income-to-package', requireAuth, async (req, res) => {
+  const parse = incomeToPackageSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.errors[0].message });
+
+  const { amount } = parse.data;
+  const userId = req.user.id;
+  const totalDeduction = amount + PLATFORM_FEE;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallets.findUnique({ where: { user_id: userId } });
+      if (!wallet || Number(wallet.income_balance) < totalDeduction) {
+        throw new Error(`Insufficient Total Income Wallet balance. Need $${totalDeduction} ($${amount} + $${PLATFORM_FEE} fee), have $${wallet?.income_balance || 0}`);
+      }
+
+      await tx.wallets.update({
+        where: { user_id: userId },
+        data: {
+          income_balance: { decrement: totalDeduction },
+          package_balance: { increment: amount }
+        }
+      });
+
+      await tx.transactions.create({
+        data: {
+          user_id: userId, amount, type: 'credit', income_source: 'income_to_package',
+          description: `Transferred $${amount} from Total Income to Package Wallet (Fee: $${PLATFORM_FEE})`, status: 'COMPLETED'
+        }
+      });
+
+      await tx.transactions.create({
+        data: {
+          user_id: userId, amount: PLATFORM_FEE, type: 'debit', income_source: 'platform_fee',
+          description: `Platform fee for Income→Package transfer of $${amount}`, status: 'COMPLETED'
+        }
+      });
+    });
+
+    res.json({ success: true, message: `Successfully transferred $${amount} to Package Wallet` });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Transfer failed' });
+  }
+});
+
+// ============================================================
+// REINVEST: Income Wallet → Investment Wallet
+// Min $100, multiples of $10, $1 platform fee
+// ============================================================
+const incomeToInvestmentSchema = z.object({
+  amount: z.number()
+    .min(100, 'Minimum transfer amount is $100')
+    .refine(val => val % 10 === 0, 'Amount must be in multiples of $10'),
+});
+
+walletRouter.post('/income-to-investment', requireAuth, async (req, res) => {
+  const parse = incomeToInvestmentSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.errors[0].message });
+
+  const { amount } = parse.data;
+  const userId = req.user.id;
+  const totalDeduction = amount + PLATFORM_FEE;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.users.findUnique({ where: { id: userId }, select: { investment_unlocked: true } });
+      if (!user?.investment_unlocked) throw new Error('You must unlock investment first before reinvesting.');
+
+      const wallet = await tx.wallets.findUnique({ where: { user_id: userId } });
+      if (!wallet || Number(wallet.income_balance) < totalDeduction) {
+        throw new Error(`Insufficient Total Income Wallet balance. Need $${totalDeduction} ($${amount} + $${PLATFORM_FEE} fee), have $${wallet?.income_balance || 0}`);
+      }
+
+      await tx.wallets.update({
+        where: { user_id: userId },
+        data: {
+          income_balance: { decrement: totalDeduction },
+          balance: { increment: amount } // Credit to Investment Wallet
+        }
+      });
+
+      await tx.transactions.create({
+        data: {
+          user_id: userId, amount, type: 'credit', income_source: 'income_to_investment',
+          description: `Reinvested $${amount} from Total Income to Investment Wallet (Fee: $${PLATFORM_FEE})`, status: 'COMPLETED'
+        }
+      });
+
+      await tx.transactions.create({
+        data: {
+          user_id: userId, amount: PLATFORM_FEE, type: 'debit', income_source: 'platform_fee',
+          description: `Platform fee for reinvestment of $${amount}`, status: 'COMPLETED'
+        }
+      });
+    });
+
+    res.json({ success: true, message: `Successfully reinvested $${amount} to Investment Wallet` });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Reinvestment failed' });
   }
 });

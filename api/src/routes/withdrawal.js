@@ -33,9 +33,9 @@ withdrawalRouter.post('/income', async (req, res) => {
   const parse = withdrawIncomeSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ 
-      success: false, 
-      error: parse.error.flatten() 
+    return res.status(400).json({
+      success: false,
+      error: parse.error.flatten()
     });
   }
 
@@ -44,78 +44,40 @@ withdrawalRouter.post('/income', async (req, res) => {
   try {
     // Verify OTP first
     const otpData = otpStore.get(`withdrawal_${userId}`);
-    
+
     if (!otpData) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP not found or expired. Please request a new OTP.' 
+      return res.status(400).json({
+        success: false,
+        error: 'OTP not found or expired. Please request a new OTP.'
       });
     }
 
     if (otpData.otp !== otp_code) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid OTP code' 
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP code'
       });
     }
 
     if (new Date() > otpData.expiresAt) {
       otpStore.delete(`withdrawal_${userId}`);
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP has expired. Please request a new OTP.' 
+      return res.status(400).json({
+        success: false,
+        error: 'OTP has expired. Please request a new OTP.'
       });
     }
 
     // Verify OTP data matches request
-    if (otpData.type !== 'income_withdrawal' || 
-        otpData.amount !== amount ||
-        otpData.blockchain !== blockchain ||
-        otpData.withdrawal_address !== withdrawal_address) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP data does not match withdrawal request' 
+    if (otpData.type !== 'income_withdrawal' ||
+      otpData.amount !== amount ||
+      otpData.blockchain !== blockchain ||
+      otpData.withdrawal_address !== withdrawal_address) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP data does not match withdrawal request'
       });
     }
     const result = await prisma.$transaction(async (prisma) => {
-      // Calculate total income from all transactions (excluding deposits)
-      const totalIncomeAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: { 
-          user_id: userId, 
-          type: 'credit',
-          income_source: { 
-            not: { endsWith: '_deposit' }
-          },
-          status: 'COMPLETED'
-        }
-      });
-      
-      const totalIncome = Number(totalIncomeAgg._sum.amount || 0);
-
-      // Get already withdrawn amounts (completed and pending)
-      const totalWithdrawnAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: {
-          user_id: userId,
-          OR: [
-            { type: 'debit', income_source: { in: ['withdrawal', 'income_withdrawal', 'investment_withdrawal'] } },
-            { type: 'WITHDRAWAL' }
-          ],
-          status: { in: ['COMPLETED', 'PENDING'] }
-        }
-      });
-      
-      const totalWithdrawn = Number(totalWithdrawnAgg._sum.amount || 0);
-
-      // Calculate available withdrawable balance
-      const availableWithdrawableBalance = Math.max(0, totalIncome - totalWithdrawn);
-
-      // Check if user has enough withdrawable income balance
-      if (availableWithdrawableBalance < amount) {
-        throw new Error(`Insufficient withdrawable income. Available: $${availableWithdrawableBalance.toFixed(2)}, Requested: $${amount}. Note: Deposited amounts are locked for 6 months.`);
-      }
-
       // Get or create wallet for balance tracking
       let wallet = await prisma.wallets.findUnique({
         where: { user_id: userId },
@@ -126,8 +88,14 @@ withdrawalRouter.post('/income', async (req, res) => {
           data: {
             user_id: userId,
             balance: 0,
+            income_balance: 0
           },
         });
+      }
+
+      // Check if user has enough withdrawable income balance
+      if (Number(wallet.income_balance) < amount) {
+        throw new Error(`Insufficient withdrawable income. Available: $${Number(wallet.income_balance).toFixed(2)}, Requested: $${amount}. Note: Deposited amounts are locked for 6 months.`);
       }
 
       // Create withdrawal transaction
@@ -145,7 +113,7 @@ withdrawalRouter.post('/income', async (req, res) => {
       // Update wallet balance (deduct immediately for pending withdrawal)
       await prisma.wallets.update({
         where: { user_id: userId },
-        data: { balance: { decrement: amount } },
+        data: { income_balance: { decrement: amount } },
       });
 
       return transaction;
@@ -166,9 +134,9 @@ withdrawalRouter.post('/income', async (req, res) => {
     });
   } catch (error) {
     console.error('Income withdrawal failed:', error);
-    res.status(400).json({ 
-      success: false, 
-      error: error.message 
+    res.status(400).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -182,9 +150,9 @@ withdrawalRouter.post('/investment', async (req, res) => {
   const parse = withdrawInvestmentSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ 
-      success: false, 
-      error: parse.error.flatten() 
+    return res.status(400).json({
+      success: false,
+      error: parse.error.flatten()
     });
   }
 
@@ -193,44 +161,44 @@ withdrawalRouter.post('/investment', async (req, res) => {
   try {
     // Verify OTP first
     const otpData = otpStore.get(`withdrawal_${userId}`);
-    
+
     if (!otpData) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP not found or expired. Please request a new OTP.' 
+      return res.status(400).json({
+        success: false,
+        error: 'OTP not found or expired. Please request a new OTP.'
       });
     }
 
     if (otpData.otp !== otp_code) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid OTP code' 
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP code'
       });
     }
 
     if (new Date() > otpData.expiresAt) {
       otpStore.delete(`withdrawal_${userId}`);
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP has expired. Please request a new OTP.' 
+      return res.status(400).json({
+        success: false,
+        error: 'OTP has expired. Please request a new OTP.'
       });
     }
 
     // Verify OTP data matches request
-    if (otpData.type !== 'investment_withdrawal' || 
-        otpData.investment_id !== investment_id ||
-        otpData.blockchain !== blockchain ||
-        otpData.withdrawal_address !== withdrawal_address) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'OTP data does not match withdrawal request' 
+    if (otpData.type !== 'investment_withdrawal' ||
+      otpData.investment_id !== investment_id ||
+      otpData.blockchain !== blockchain ||
+      otpData.withdrawal_address !== withdrawal_address) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP data does not match withdrawal request'
       });
     }
 
     const result = await prisma.$transaction(async (prisma) => {
       // Get the investment with lock
       const investment = await prisma.investments.findUnique({
-        where: { 
+        where: {
           id: investment_id,
           user_id: userId // Ensure user owns the investment
         },
@@ -248,9 +216,9 @@ withdrawalRouter.post('/investment', async (req, res) => {
       // Check 6-month lock period
       const currentDate = new Date();
       const investmentDate = new Date(investment.start_date);
-      const monthsDifference = (currentDate.getFullYear() - investmentDate.getFullYear()) * 12 + 
-                              (currentDate.getMonth() - investmentDate.getMonth());
-      
+      const monthsDifference = (currentDate.getFullYear() - investmentDate.getFullYear()) * 12 +
+        (currentDate.getMonth() - investmentDate.getMonth());
+
       if (monthsDifference < 6) {
         const unlockDate = new Date(investmentDate);
         unlockDate.setMonth(unlockDate.getMonth() + 6);
@@ -312,9 +280,9 @@ withdrawalRouter.post('/investment', async (req, res) => {
     });
   } catch (error) {
     console.error('Investment withdrawal failed:', error);
-    res.status(400).json({ 
-      success: false, 
-      error: error.message 
+    res.status(400).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -332,8 +300,8 @@ withdrawalRouter.get('/history', async (req, res) => {
     const whereClause = {
       user_id: userId,
       type: 'debit',
-      income_source: { 
-        in: ['withdrawal', 'income_withdrawal', 'investment_withdrawal'] 
+      income_source: {
+        in: ['withdrawal', 'income_withdrawal', 'investment_withdrawal']
       },
     };
 
@@ -374,23 +342,23 @@ withdrawalRouter.get('/history', async (req, res) => {
       let address = null;
       let investmentId = null;
       let packageName = null;
-      
+
       if (withdrawal.description) {
         const blockchainMatch = withdrawal.description.match(/to (\w+) address/);
         if (blockchainMatch) {
           blockchain = blockchainMatch[1];
         }
-        
+
         const addressMatch = withdrawal.description.match(/address ([a-zA-Z0-9]{10})\.\.\./);
         if (addressMatch) {
           address = addressMatch[1] + '...';
         }
-        
+
         const investmentIdMatch = withdrawal.description.match(/ID: ([a-zA-Z0-9]+)\)/);
         if (investmentIdMatch) {
           investmentId = investmentIdMatch[1];
         }
-        
+
         const packageMatch = withdrawal.description.match(/from (.+?) \(ID:/);
         if (packageMatch) {
           packageName = packageMatch[1];
@@ -465,23 +433,23 @@ withdrawalRouter.get('/investments', async (req, res) => {
     });
 
     const currentDate = new Date();
-    
+
     const investmentsWithEligibility = depositTransactions.map((deposit) => {
       const depositDate = new Date(deposit.timestamp);
       const unlockDate = deposit.unlock_date ? new Date(deposit.unlock_date) : new Date(depositDate.setMonth(depositDate.getMonth() + 6));
-      
+
       // Calculate if deposit is eligible for withdrawal (past 6 months)
       const isEligible = currentDate >= unlockDate;
-      
+
       // Calculate days until eligible
       const daysUntilEligible = isEligible ? 0 : Math.max(0, Math.ceil((unlockDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)));
-      
+
       // Extract blockchain type from income_source (e.g., "BEP20_deposit" -> "BEP20")
       const blockchainType = deposit.income_source.replace('_deposit', '').toUpperCase();
-      
+
       // Extract amount from description or use transaction amount
       const packageName = `${blockchainType} Deposit`;
-      
+
       return {
         id: deposit.id,
         amount: parseFloat(deposit.amount.toString()),
@@ -521,10 +489,10 @@ withdrawalRouter.get('/stats', async (req, res) => {
     // Calculate total income from all transactions (excluding deposits)
     const totalIncomeAgg = await prisma.transactions.aggregate({
       _sum: { amount: true },
-      where: { 
-        user_id: userId, 
+      where: {
+        user_id: userId,
         type: 'credit',
-        income_source: { 
+        income_source: {
           not: { endsWith: '_deposit' }
         },
         status: 'COMPLETED'
@@ -532,7 +500,7 @@ withdrawalRouter.get('/stats', async (req, res) => {
     });
 
     const totalIncome = Number(totalIncomeAgg._sum.amount || 0);
-    
+
     // Get completed withdrawals
     const completedWithdrawalsAgg = await prisma.transactions.aggregate({
       _sum: { amount: true },
@@ -545,9 +513,9 @@ withdrawalRouter.get('/stats', async (req, res) => {
         status: 'COMPLETED'
       }
     });
-    
+
     const completedWithdrawals = Number(completedWithdrawalsAgg._sum.amount || 0);
-    
+
     // Get pending withdrawals
     const pendingWithdrawalsAgg = await prisma.transactions.aggregate({
       _sum: { amount: true },
@@ -557,12 +525,13 @@ withdrawalRouter.get('/stats', async (req, res) => {
         status: 'PENDING'
       }
     });
-    
+
     const pendingAmount = Number(pendingWithdrawalsAgg._sum.amount || 0);
-    
-    // Calculate available withdrawable balance
+
+    // Get wallet balance for true available withdrawable balance
+    const wallet = await prisma.wallets.findUnique({ where: { user_id: userId } });
+    const availableWithdrawableBalance = Number(wallet?.income_balance || 0);
     const availableIncomeBalance = totalIncome - completedWithdrawals;
-    const availableWithdrawableBalance = Math.max(0, availableIncomeBalance - pendingAmount);
 
     // Get total withdrawal count (completed only)
     const totalWithdrawalsCount = await prisma.transactions.count({
