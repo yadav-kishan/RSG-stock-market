@@ -43,7 +43,7 @@ const WhyChooseSection = () => {
             <div className="w-1 h-12 bg-gold"></div>
             <div>
               <p className="text-gold font-semibold text-sm uppercase tracking-wide">WHY YOU</p>
-              <h2 className="text-4xl font-bold text-navy font-poppins">CHOOSE FOX TRADING</h2>
+              <h2 className="text-4xl font-bold text-navy font-poppins">CHOOSE RSG STOCK MARKET</h2>
             </div>
           </div>
           <p className="text-gray-600 text-lg max-w-2xl mx-auto">

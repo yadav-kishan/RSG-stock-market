@@ -560,7 +560,7 @@ const Dashboard: React.FC = () => {
 
                 {/* Withdraw Button */}
                 <Button
-                  onClick={() => window.location.href = '/app/withdrawal'}
+                  onClick={() => window.location.href = '/app/withdrawal/income'}
                   variant="outline"
                   className="border-green-500 text-green-500 hover:bg-green-500 hover:text-white w-full"
                   disabled={userStats.incomeBalance < 10}
@@ -657,6 +657,7 @@ const Dashboard: React.FC = () => {
               ${userStats.totalWithdrawal.toLocaleString()}
             </div>
             <Button
+              onClick={() => window.location.href = '/app/withdrawal/income'}
               variant="outline"
               size="sm"
               className="w-full hover:bg-red-500/10 hover:border-red-500/50"

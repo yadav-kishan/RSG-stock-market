@@ -25,11 +25,8 @@ const CountdownSection = () => {
       const d = new Date(envValue);
       if (!isNaN(d.getTime())) return d;
     }
-    // Fallback: 240 days from first render
-    const fallback = new Date();
-    fallback.setDate(fallback.getDate() + 240);
-    // End of day in IST-ish sense not enforced; this is a generic fallback
-    return fallback;
+    // Fixed fallback date so it doesn't reset on every page refresh
+    return new Date('2026-11-10T00:00:00Z');
   }, []);
 
   const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(targetDate));
