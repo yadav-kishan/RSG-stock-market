@@ -84,109 +84,94 @@ userRouter.get('/dashboard', async (req, res) => {
             select: { full_name: true, email: true, referral_code: true, created_at: true, country: true, phone: true, investment_unlocked: true, investment_unlocked_at: true }
         });
 
-        // Get total deposited amount (for investment tracking)
-        const depositedAmountAgg = await prisma.transactions.aggregate({
-            _sum: { amount: true },
-            where: {
-                user_id: userId,
-                OR: [
-                    { type: 'DEPOSIT', status: 'COMPLETED' },
-                    { type: 'credit', income_source: { endsWith: '_deposit' } }
-                ],
-                status: 'COMPLETED'
-            },
-        });
-
-        // Get wallet data with upsert to ensure it exists
-        const wallet = await prisma.wallets.upsert({
-            where: { user_id: userId },
-            update: {},
-            create: { user_id: userId, balance: 0 }
-        });
-
-        // Get recent transactions (exclude old incorrect system transactions)
-        const recentTransactions = await prisma.transactions.findMany({
-            where: {
-                user_id: userId,
-                description: {
-                    not: { contains: '[OLD SYSTEM' } // Exclude old incorrect transactions
-                }
-            },
-            orderBy: { timestamp: 'desc' },
-            take: 20, // Increased to show more recent activity
-        });
-
-        // Calculate income breakdown (including completed transactions only for totals, exclude old system)
-        const incomeBreakdown = await prisma.transactions.groupBy({
-            by: ['income_source'],
-            _sum: { amount: true },
-            where: {
-                user_id: userId,
-                type: 'credit',
-                status: 'COMPLETED',
-                description: {
-                    not: { contains: '[OLD SYSTEM' } // Exclude old incorrect transactions
-                }
-            },
-        });
-
-        // Total income from all sources - exclude deposits and old system transactions
-        // This includes: direct_income, team_income, salary_income, referral_income, etc.
-        const totalIncomeAgg = await prisma.transactions.aggregate({
-            _sum: { amount: true },
-            where: {
-                user_id: userId,
-                type: 'credit',
-                income_source: {
-                    notIn: ['daily_profit'], // Exclude daily_profit (deprecated)
-                    not: { endsWith: '_deposit' } // Exclude all deposit sources
+        // ====== BATCH 1: Independent queries (run in parallel) ======
+        const [depositedAmountAgg, wallet, recentTransactions, incomeBreakdown, totalIncomeAgg, totalWithdrawalAgg, directChildren] = await Promise.all([
+            // Total deposited amount
+            prisma.transactions.aggregate({
+                _sum: { amount: true },
+                where: {
+                    user_id: userId,
+                    OR: [
+                        { type: 'DEPOSIT', status: 'COMPLETED' },
+                        { type: 'credit', income_source: { endsWith: '_deposit' } }
+                    ],
+                    status: 'COMPLETED'
                 },
-                status: 'COMPLETED',
-                description: {
-                    not: { contains: '[OLD SYSTEM' } // Exclude old incorrect transactions
+            }),
+            // Wallet (upsert to ensure exists)
+            prisma.wallets.upsert({
+                where: { user_id: userId },
+                update: {},
+                create: { user_id: userId, balance: 0 }
+            }),
+            // Recent transactions
+            prisma.transactions.findMany({
+                where: {
+                    user_id: userId,
+                    description: { not: { contains: '[OLD SYSTEM' } }
+                },
+                orderBy: { timestamp: 'desc' },
+                take: 20,
+            }),
+            // Income breakdown
+            prisma.transactions.groupBy({
+                by: ['income_source'],
+                _sum: { amount: true },
+                where: {
+                    user_id: userId,
+                    type: 'credit',
+                    status: 'COMPLETED',
+                    description: { not: { contains: '[OLD SYSTEM' } }
+                },
+            }),
+            // Total income
+            prisma.transactions.aggregate({
+                _sum: { amount: true },
+                where: {
+                    user_id: userId,
+                    type: 'credit',
+                    income_source: {
+                        notIn: ['daily_profit'],
+                        not: { endsWith: '_deposit' }
+                    },
+                    status: 'COMPLETED',
+                    description: { not: { contains: '[OLD SYSTEM' } }
                 }
-            }
-        });
+            }),
+            // Total withdrawals
+            prisma.transactions.aggregate({
+                _sum: { amount: true },
+                where: {
+                    user_id: userId,
+                    OR: [
+                        { type: 'debit', income_source: { in: ['withdrawal', 'income_withdrawal', 'investment_withdrawal'] } },
+                        { type: 'WITHDRAWAL' }
+                    ],
+                    status: 'COMPLETED'
+                }
+            }),
+            // Direct children
+            prisma.users.findMany({
+                where: { sponsor_id: userId },
+                select: { id: true, position: true }
+            }),
+        ]);
 
-        // Total withdrawals (only completed withdrawals)
-        const totalWithdrawalAgg = await prisma.transactions.aggregate({
+        // ====== BATCH 2: Depends on directChildren (team/business queries in parallel) ======
+        const leftLegDirectIds = directChildren.filter(c => c.position === 'LEFT').map(c => c.id);
+        const rightLegDirectIds = directChildren.filter(c => c.position === 'RIGHT').map(c => c.id);
+
+        const [downlineIds, leftLegIds, rightLegIds] = await Promise.all([
+            getDownlineIds(directChildren.map(c => c.id)),
+            getDownlineIds(leftLegDirectIds),
+            getDownlineIds(rightLegDirectIds),
+        ]);
+
+        // ====== BATCH 3: Business volume aggregations (in parallel) ======
+        const businessWhere = (ids) => ({
             _sum: { amount: true },
             where: {
-                user_id: userId,
-                OR: [
-                    { type: 'debit', income_source: { in: ['withdrawal', 'income_withdrawal', 'investment_withdrawal'] } },
-                    { type: 'WITHDRAWAL' }
-                ],
-                status: 'COMPLETED'
-            }
-        });
-
-        // Get team data
-        const directChildren = await prisma.users.findMany({
-            where: { sponsor_id: userId },
-            select: { id: true }
-        });
-
-        const downlineIds = await getDownlineIds(directChildren.map(c => c.id));
-
-        // Calculate business volumes
-        const leftLegUsers = await prisma.users.findMany({
-            where: { sponsor_id: userId, position: 'LEFT' },
-            select: { id: true }
-        });
-
-        const rightLegUsers = await prisma.users.findMany({
-            where: { sponsor_id: userId, position: 'RIGHT' },
-            select: { id: true }
-        });
-
-        const leftLegIds = await getDownlineIds(leftLegUsers.map(u => u.id));
-        const rightLegIds = await getDownlineIds(rightLegUsers.map(u => u.id));
-
-        const leftLegBusinessAgg = await prisma.transactions.aggregate({
-            _sum: { amount: true },
-            where: {
-                user_id: { in: leftLegIds },
+                user_id: { in: ids },
                 OR: [
                     { type: 'DEPOSIT', status: 'COMPLETED' },
                     { type: 'credit', income_source: { endsWith: '_deposit' } }
@@ -194,27 +179,11 @@ userRouter.get('/dashboard', async (req, res) => {
             }
         });
 
-        const rightLegBusinessAgg = await prisma.transactions.aggregate({
-            _sum: { amount: true },
-            where: {
-                user_id: { in: rightLegIds },
-                OR: [
-                    { type: 'DEPOSIT', status: 'COMPLETED' },
-                    { type: 'credit', income_source: { endsWith: '_deposit' } }
-                ]
-            }
-        });
-
-        const totalBusinessAgg = await prisma.transactions.aggregate({
-            _sum: { amount: true },
-            where: {
-                user_id: { in: downlineIds },
-                OR: [
-                    { type: 'DEPOSIT', status: 'COMPLETED' },
-                    { type: 'credit', income_source: { endsWith: '_deposit' } }
-                ]
-            }
-        });
+        const [leftLegBusinessAgg, rightLegBusinessAgg, totalBusinessAgg] = await Promise.all([
+            prisma.transactions.aggregate(businessWhere(leftLegIds)),
+            prisma.transactions.aggregate(businessWhere(rightLegIds)),
+            prisma.transactions.aggregate(businessWhere(downlineIds)),
+        ]);
 
         return res.json({
             // User info

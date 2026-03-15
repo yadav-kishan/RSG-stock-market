@@ -587,48 +587,25 @@ adminRouter.get('/users', async (req, res) => {
 
     // Enrich with investment & profit data
     const enrichedUsers = await Promise.all(users.map(async (user) => {
-      // Total deposits
-      const totalDepositAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: {
-          user_id: user.id,
-          type: 'credit',
-          status: 'COMPLETED',
-          income_source: { endsWith: '_deposit' }
-        }
-      });
-
-      // Total profit earned (trading_bonus + trading_bonus_topup)
-      const totalProfitAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: {
-          user_id: user.id,
-          type: 'credit',
-          status: 'COMPLETED',
-          income_source: { in: ['trading_bonus', 'trading_bonus_topup'] }
-        }
-      });
-
-      // Total income (all credits except deposits)
-      const totalIncomeAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: {
-          user_id: user.id,
-          type: 'credit',
-          status: 'COMPLETED',
-          income_source: { not: { endsWith: '_deposit' } }
-        }
-      });
-
-      // Total withdrawals
-      const totalWithdrawalAgg = await prisma.transactions.aggregate({
-        _sum: { amount: true },
-        where: {
-          user_id: user.id,
-          type: 'debit',
-          status: { in: ['COMPLETED', 'PENDING'] }
-        }
-      });
+      // Run all 4 aggregations in parallel per user
+      const [totalDepositAgg, totalProfitAgg, totalIncomeAgg, totalWithdrawalAgg] = await Promise.all([
+        prisma.transactions.aggregate({
+          _sum: { amount: true },
+          where: { user_id: user.id, type: 'credit', status: 'COMPLETED', income_source: { endsWith: '_deposit' } }
+        }),
+        prisma.transactions.aggregate({
+          _sum: { amount: true },
+          where: { user_id: user.id, type: 'credit', status: 'COMPLETED', income_source: { in: ['trading_bonus', 'trading_bonus_topup'] } }
+        }),
+        prisma.transactions.aggregate({
+          _sum: { amount: true },
+          where: { user_id: user.id, type: 'credit', status: 'COMPLETED', income_source: { not: { endsWith: '_deposit' } } }
+        }),
+        prisma.transactions.aggregate({
+          _sum: { amount: true },
+          where: { user_id: user.id, type: 'debit', status: { in: ['COMPLETED', 'PENDING'] } }
+        }),
+      ]);
 
       return {
         ...user,
@@ -641,7 +618,7 @@ adminRouter.get('/users', async (req, res) => {
         total_profit: Number(totalProfitAgg._sum.amount || 0),
         total_income: Number(totalIncomeAgg._sum.amount || 0),
         total_withdrawal: Number(totalWithdrawalAgg._sum.amount || 0),
-        wallets: undefined // Remove raw wallets from response
+        wallets: undefined
       };
     }));
 
