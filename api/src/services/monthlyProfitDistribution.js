@@ -122,8 +122,8 @@ async function calculate30DayProfit(depositId, depositAmount, depositDate) {
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Daily profit rate: 2% monthly / 30 days = 0.0667% per day
-  const dailyProfitRate = 0.02 / 30;
+  // Daily profit rate: 5% monthly / 30 days = 0.1667% per day
+  const dailyProfitRate = 0.05 / 30;
   const dailyProfit = Number(depositAmount) * dailyProfitRate;
 
   // Calculate profit for 30 days

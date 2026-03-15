@@ -34,6 +34,11 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Unauthorized: User not found in database' });
     }
 
+    // Check if user is blocked
+    if (dbUser.is_blocked) {
+      return res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
+    }
+
     // Attach user info to request
     req.user = {
       id: dbUser.id,

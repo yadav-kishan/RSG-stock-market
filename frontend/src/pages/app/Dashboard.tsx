@@ -448,7 +448,7 @@ const Dashboard: React.FC = () => {
               {showBalance ? `$${userStats.investmentBalance.toLocaleString()}` : '****'}
             </div>
             <div className="text-sm text-muted-foreground mb-3">
-              {userStats.investmentUnlocked ? 'Active — Earning 2% Monthly Profit' : 'Locked — Unlock to start earning'}
+              {userStats.investmentUnlocked ? 'Active — Earning 5% Monthly Profit' : 'Locked — Unlock to start earning'}
             </div>
             <button
               onClick={() => setIsProfitModalOpen(true)}

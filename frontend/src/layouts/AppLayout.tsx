@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDashboardData } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Menu, X, User, Edit2, MapPin, Calendar, Mail, Phone, ChevronRight, ChevronDown, PlusCircle } from 'lucide-react';
+import { ShieldCheck, Menu, X, User, Edit2, MapPin, Calendar, Mail, Phone, ChevronRight, ChevronDown, PlusCircle, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import LogoImage from '@/components/ui/logo-image';
 import '../styles/mobile-menu.css';
@@ -307,6 +307,14 @@ export default function AppLayout() {
               >
                 <PlusCircle size={16} />
                 Add Funds
+              </NavLink>
+              <NavLink
+                to="/app/admin/users"
+                className={({ isActive }) => `flex items-center gap-2 ${getNavLinkClass(isActive)}`}
+                onClick={closeMobileMenu}
+              >
+                <Users size={16} />
+                Manage Users
               </NavLink>
             </>
           )}

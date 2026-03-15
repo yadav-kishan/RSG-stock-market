@@ -272,7 +272,7 @@ userRouter.get('/profit-summary', async (req, res) => {
         });
 
         const investmentBalance = Number(wallet?.balance || 0);
-        const projectedMonthlyProfit = parseFloat((investmentBalance * 0.02).toFixed(2));
+        const projectedMonthlyProfit = parseFloat((investmentBalance * 0.05).toFixed(2));
 
         // Last 12 months of trading bonus payouts
         const profitHistory = await prisma.transactions.findMany({
@@ -291,7 +291,7 @@ userRouter.get('/profit-summary', async (req, res) => {
         return res.json({
             investment_wallet_balance: investmentBalance,
             projected_monthly_profit: projectedMonthlyProfit,
-            profit_rate_percent: 2,
+            profit_rate_percent: 5,
             income_wallet_balance: Number(wallet?.income_balance || 0),
             total_profit_earned: parseFloat(totalProfitEarned.toFixed(2)),
             profit_history: profitHistory.map(t => ({

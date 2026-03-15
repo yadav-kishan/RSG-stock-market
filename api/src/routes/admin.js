@@ -423,10 +423,10 @@ adminRouter.post('/withdrawals/reject/:transactionId', async (req, res) => {
         where: { user_id: transaction.user_id },
         create: {
           user_id: transaction.user_id,
-          balance: Number(transaction.amount)
+          income_balance: Number(transaction.amount)
         },
         update: {
-          balance: {
+          income_balance: {
             increment: Number(transaction.amount)
           }
         },
@@ -543,5 +543,141 @@ adminRouter.post('/deposits/manual', async (req, res) => {
       error: 'Failed to process manual deposits.',
       details: error.message
     });
+  }
+});
+
+// ============================================================
+// GET ALL USERS (with wallets, investments, profits)
+// ============================================================
+adminRouter.get('/users', async (req, res) => {
+  try {
+    const { search } = req.query;
+    
+    const whereCondition = search ? {
+      role: 'USER',
+      OR: [
+        { full_name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { referral_code: { contains: search, mode: 'insensitive' } }
+      ]
+    } : { role: 'USER' };
+
+    const users = await prisma.users.findMany({
+      where: whereCondition,
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        referral_code: true,
+        phone: true,
+        country: true,
+        is_blocked: true,
+        investment_unlocked: true,
+        created_at: true,
+        wallets: {
+          select: {
+            balance: true,
+            package_balance: true,
+            income_balance: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    // Enrich with investment & profit data
+    const enrichedUsers = await Promise.all(users.map(async (user) => {
+      // Total deposits
+      const totalDepositAgg = await prisma.transactions.aggregate({
+        _sum: { amount: true },
+        where: {
+          user_id: user.id,
+          type: 'credit',
+          status: 'COMPLETED',
+          income_source: { endsWith: '_deposit' }
+        }
+      });
+
+      // Total profit earned (trading_bonus + trading_bonus_topup)
+      const totalProfitAgg = await prisma.transactions.aggregate({
+        _sum: { amount: true },
+        where: {
+          user_id: user.id,
+          type: 'credit',
+          status: 'COMPLETED',
+          income_source: { in: ['trading_bonus', 'trading_bonus_topup'] }
+        }
+      });
+
+      // Total income (all credits except deposits)
+      const totalIncomeAgg = await prisma.transactions.aggregate({
+        _sum: { amount: true },
+        where: {
+          user_id: user.id,
+          type: 'credit',
+          status: 'COMPLETED',
+          income_source: { not: { endsWith: '_deposit' } }
+        }
+      });
+
+      // Total withdrawals
+      const totalWithdrawalAgg = await prisma.transactions.aggregate({
+        _sum: { amount: true },
+        where: {
+          user_id: user.id,
+          type: 'debit',
+          status: { in: ['COMPLETED', 'PENDING'] }
+        }
+      });
+
+      return {
+        ...user,
+        wallet: user.wallets ? {
+          investment_balance: Number(user.wallets.balance || 0),
+          package_balance: Number(user.wallets.package_balance || 0),
+          income_balance: Number(user.wallets.income_balance || 0),
+        } : { investment_balance: 0, package_balance: 0, income_balance: 0 },
+        total_deposited: Number(totalDepositAgg._sum.amount || 0),
+        total_profit: Number(totalProfitAgg._sum.amount || 0),
+        total_income: Number(totalIncomeAgg._sum.amount || 0),
+        total_withdrawal: Number(totalWithdrawalAgg._sum.amount || 0),
+        wallets: undefined // Remove raw wallets from response
+      };
+    }));
+
+    res.json({ users: enrichedUsers, total: enrichedUsers.length });
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// ============================================================
+// BLOCK / UNBLOCK USER
+// ============================================================
+adminRouter.post('/users/:userId/block', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { id: true, full_name: true, is_blocked: true, role: true }
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'ADMIN') return res.status(400).json({ error: 'Cannot block admin users' });
+
+    const updated = await prisma.users.update({
+      where: { id: userId },
+      data: { is_blocked: !user.is_blocked }
+    });
+
+    res.json({
+      success: true,
+      message: `User ${user.full_name} has been ${updated.is_blocked ? 'blocked' : 'unblocked'}`,
+      is_blocked: updated.is_blocked
+    });
+  } catch (error) {
+    console.error('Block/Unblock error:', error);
+    res.status(500).json({ error: 'Failed to update user status' });
   }
 });

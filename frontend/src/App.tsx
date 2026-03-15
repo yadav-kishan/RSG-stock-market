@@ -43,6 +43,7 @@ import WithdrawalHistory from "./pages/app/WithdrawalHistory";
 import MyInvestments from "./pages/app/MyInvestments";
 import TeamInvestments from "./pages/app/TeamInvestments";
 import AddFunds from "./pages/app/admin/AddFunds";
+import UserManagement from "./pages/app/admin/UserManagement";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,6 +168,7 @@ function AppRoutes() {
           <>
             <Route path="admin/payments" element={<PaymentsPage />} />
             <Route path="admin/add-funds" element={<AddFunds />} />
+            <Route path="admin/users" element={<UserManagement />} />
           </>
         )}
       </Route>

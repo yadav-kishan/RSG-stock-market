@@ -33,7 +33,7 @@ const MonthlyProfitModal: React.FC<MonthlyProfitModalProps> = ({ isOpen, onClose
                         Monthly Profit Summary
                     </DialogTitle>
                     <DialogDescription>
-                        2% monthly return on your Investment Wallet balance, paid on the 1st of each month.
+                        5% monthly return on your Investment Wallet balance, paid on the 1st of each month.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -58,7 +58,7 @@ const MonthlyProfitModal: React.FC<MonthlyProfitModalProps> = ({ isOpen, onClose
                             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-center">
                                 <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mb-1">
                                     <Percent className="h-3 w-3" />
-                                    Next Payout (2%)
+                                    Next Payout (5%)
                                 </div>
                                 <div className="text-xl font-bold text-yellow-500">
                                     +${Number(data.projected_monthly_profit).toFixed(2)}
@@ -94,7 +94,7 @@ const MonthlyProfitModal: React.FC<MonthlyProfitModalProps> = ({ isOpen, onClose
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Profits are distributed automatically on the <strong>1st of every month</strong>.
-                                The payout is 2% of your Investment Wallet balance on that date.
+                                The payout is 5% of your Investment Wallet balance on that date.
                             </p>
                         </div>
 

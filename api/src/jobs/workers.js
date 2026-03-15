@@ -1,9 +1,9 @@
 import prisma from '../lib/prisma.js';
 
 /**
- * Monthly 2% profit on Investment Wallet balance.
+ * Monthly 5% profit on Investment Wallet balance.
  * Runs on the 1st of every month.
- * Credits 2% of each user's Investment Wallet (balance) to their Total Income Wallet (income_balance).
+ * Credits 5% of each user's Investment Wallet (balance) to their Total Income Wallet (income_balance).
  */
 export async function runMonthlyTradingBonus() {
   // Get all wallets that have an investment balance > 0
@@ -15,12 +15,12 @@ export async function runMonthlyTradingBonus() {
   let processed = 0;
   for (const wallet of wallets) {
     const investmentBalance = parseFloat(wallet.balance);
-    const bonus = parseFloat((investmentBalance * 0.02).toFixed(2)); // 2% monthly
+    const bonus = parseFloat((investmentBalance * 0.05).toFixed(2)); // 5% monthly
 
     if (bonus <= 0) continue;
 
     await prisma.$transaction(async (tx) => {
-      // Credit 2% profit to Total Income Wallet
+      // Credit 5% profit to Total Income Wallet
       await tx.wallets.update({
         where: { user_id: wallet.user_id },
         data: { income_balance: { increment: bonus } },
@@ -34,14 +34,14 @@ export async function runMonthlyTradingBonus() {
           type: 'credit',
           income_source: 'trading_bonus',
           status: 'COMPLETED',
-          description: `Monthly 2% profit on Investment Wallet balance of $${investmentBalance.toFixed(2)}`,
+          description: `Monthly 5% profit on Investment Wallet balance of $${investmentBalance.toFixed(2)}`,
         },
       });
     });
     processed++;
   }
 
-  console.log(`Monthly 2% profit processed for ${processed} users.`);
+  console.log(`Monthly 5% profit processed for ${processed} users.`);
 }
 
 export async function runMonthlyReferralIncome() {
