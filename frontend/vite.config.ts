@@ -22,7 +22,24 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks(id: string) {
+          // Split vendor libraries into separate cached chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            if (id.includes('lucide')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('@radix-ui') || id.includes('@supabase')) {
+              return 'vendor-ui';
+            }
+            return 'vendor';
+          }
+        },
       },
     },
     copyPublicDir: true,
