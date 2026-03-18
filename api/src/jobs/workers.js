@@ -143,26 +143,17 @@ export async function runMonthlySalary() {
 
   const allUsers = await prisma.users.findMany({ select: { id: true, created_at: true } });
 
-  // Helper function to get all downline user IDs
+  // Helper: single recursive CTE query instead of N+1 BFS
   const getDownlineIds = async (startUserId) => {
-    const allDescendants = new Set();
-    const queue = [startUserId];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      const children = await prisma.users.findMany({
-        where: { sponsor_id: currentId },
-        select: { id: true }
-      });
-
-      for (const child of children) {
-        if (!allDescendants.has(child.id)) {
-          allDescendants.add(child.id);
-          queue.push(child.id);
-        }
-      }
-    }
-    return Array.from(allDescendants);
+    const result = await prisma.$queryRawUnsafe(`
+      WITH RECURSIVE downline AS (
+        SELECT id FROM users WHERE sponsor_id = $1
+        UNION ALL
+        SELECT u.id FROM users u INNER JOIN downline d ON u.sponsor_id = d.id
+      )
+      SELECT id FROM downline
+    `, startUserId);
+    return result.map(r => r.id);
   };
 
   for (const user of allUsers) {

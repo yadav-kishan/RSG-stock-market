@@ -56,23 +56,20 @@ userRouter.use(requireAuth);
  */
 async function getDownlineIds(startUserIds) {
     if (startUserIds.length === 0) return [];
-    const allDescendants = new Set();
-    let queue = [...startUserIds];
-    const visited = new Set();
-
-    while (queue.length > 0) {
-        const currentId = queue.shift();
-        if (visited.has(currentId)) continue;
-        visited.add(currentId);
-        allDescendants.add(currentId);
-
-        const children = await prisma.users.findMany({
-            where: { sponsor_id: currentId },
-            select: { id: true },
-        });
-        queue.push(...children.map(c => c.id));
-    }
-    return Array.from(allDescendants);
+    // Single recursive CTE query instead of N+1 BFS queries
+    const placeholders = startUserIds.map((_, i) => `$${i + 1}`).join(', ');
+    const result = await prisma.$queryRawUnsafe(`
+        WITH RECURSIVE downline AS (
+            SELECT id FROM users WHERE sponsor_id IN (${placeholders})
+            UNION ALL
+            SELECT u.id FROM users u INNER JOIN downline d ON u.sponsor_id = d.id
+        )
+        SELECT id FROM downline
+    `, ...startUserIds);
+    // Include the start IDs + all descendants
+    const allIds = new Set(startUserIds);
+    for (const row of result) allIds.add(row.id);
+    return Array.from(allIds);
 }
 
 userRouter.get('/dashboard', async (req, res) => {
