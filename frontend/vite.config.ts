@@ -23,20 +23,10 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          // Split vendor libraries into separate cached chunks
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
-            }
-            if (id.includes('@tanstack')) {
-              return 'vendor-query';
-            }
-            if (id.includes('lucide')) {
-              return 'vendor-icons';
-            }
-            if (id.includes('@radix-ui') || id.includes('@supabase')) {
-              return 'vendor-ui';
-            }
+            // Keep lucide icons separate (large, rarely changes)
+            if (id.includes('lucide')) return 'vendor-icons';
+            // Everything else in one vendor chunk to avoid React load-order issues
             return 'vendor';
           }
         },
