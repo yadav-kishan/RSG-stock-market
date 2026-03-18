@@ -77,12 +77,111 @@ const Dashboard: React.FC = () => {
   }, [data, loading]);
 
 
-  // Show loading state
+  // Show skeleton loading state — renders full interface layout with placeholders
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-        <span className="ml-2 text-muted-foreground">Loading dashboard...</span>
+      <div className="space-y-6 pb-8 animate-in fade-in duration-300">
+        {/* Skeleton: Welcome Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-7 w-48 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-9 w-9 bg-muted rounded animate-pulse" />
+            <div className="h-9 w-20 bg-muted rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Skeleton: Countdown Timer */}
+        <div className="w-full">
+          <div className="text-center mb-4">
+            <div className="h-6 w-32 bg-muted rounded mx-auto animate-pulse" />
+          </div>
+          <div className="grid grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-yellow-500/20 rounded-lg p-3 sm:p-4 text-center animate-pulse">
+                <div className="h-8 w-12 bg-yellow-500/30 rounded mx-auto mb-1" />
+                <div className="h-3 w-10 bg-yellow-500/30 rounded mx-auto" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Skeleton: 3 wallet cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {[1,2,3].map(i => (
+            <Card key={i} className="border-yellow-500/20">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+                  <div className="h-5 w-5 bg-muted rounded animate-pulse" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="h-8 w-28 bg-muted rounded animate-pulse" />
+                <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-9 w-full bg-muted rounded animate-pulse" />
+                  <div className="h-9 w-full bg-muted rounded animate-pulse" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Skeleton: 5 income/stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {[1,2,3,4,5].map(i => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+              </CardHeader>
+              <CardContent className="pt-0 space-y-2">
+                <div className="h-7 w-24 bg-muted rounded animate-pulse" />
+                <div className="h-8 w-full bg-muted rounded animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Skeleton: Business Overview + Recent Transactions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-36 bg-muted rounded animate-pulse" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="text-center p-4 bg-muted/20 rounded-lg">
+                    <div className="h-6 w-16 bg-muted rounded mx-auto animate-pulse mb-2" />
+                    <div className="h-3 w-20 bg-muted rounded mx-auto animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-40 bg-muted rounded animate-pulse" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 bg-muted rounded-full animate-pulse" />
+                    <div className="space-y-1">
+                      <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-5 w-16 bg-muted rounded animate-pulse" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
