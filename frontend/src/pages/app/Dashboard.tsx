@@ -276,8 +276,7 @@ const Dashboard: React.FC = () => {
     try {
       await api('/api/wallet/transfer-to-investment', {
         method: 'POST',
-        body: JSON.stringify({ amount: amt }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { amount: amt }
       });
       alert(`Successfully transferred $${amt} to Investment Wallet ($1 fee applied).`);
       setTransferAmount('');
@@ -305,8 +304,7 @@ const Dashboard: React.FC = () => {
     try {
       await api('/api/wallet/income-to-package', {
         method: 'POST',
-        body: JSON.stringify({ amount: amt }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { amount: amt }
       });
       alert(`Successfully transferred $${amt} to Package Wallet ($1 fee applied).`);
       setIncomeToPackageAmount('');
@@ -338,8 +336,7 @@ const Dashboard: React.FC = () => {
     try {
       await api('/api/wallet/income-to-investment', {
         method: 'POST',
-        body: JSON.stringify({ amount: amt }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { amount: amt }
       });
       alert(`Successfully reinvested $${amt} into Investment Wallet ($1 fee applied).`);
       setReinvestAmount('');

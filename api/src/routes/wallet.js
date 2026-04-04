@@ -342,6 +342,7 @@ walletRouter.post('/income-to-package', requireAuth, async (req, res) => {
 
     res.json({ success: true, message: `Successfully transferred $${amount} to Package Wallet` });
   } catch (error) {
+    console.error('Income-to-Package Transfer Error:', error);
     res.status(400).json({ error: error.message || 'Transfer failed' });
   }
 });
